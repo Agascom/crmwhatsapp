@@ -70,8 +70,9 @@ OpenWA v0.14.6 est versionné dans **`openwa/`**, sans les fichiers Docker (`Doc
 3. **Node.js version** : **22** (ou 24).
 4. **Build command** : **laisser VIDE** — le dossier `dist/` pré-compilé est déjà committé. En cas de modification du code, régénérez en local puis committez :
    ```bash
-   cd openwa && npm ci && npm run build && cd ..
-   git add openwa/dist && git commit -m "openwa: regen dist" && git push
+   cd openwa && npm ci && npm run build
+   cd dashboard && npm ci && npm run build && cd ..
+   git add openwa/dist openwa/dashboard/dist && git commit -m "openwa: regen dist + dashboard" && git push
    ```
 5. **Entry file** : `dist/main.js`.
 6. **Variables d'environnement** :
