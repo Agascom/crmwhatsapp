@@ -12,16 +12,20 @@ import {
 import { colors, statusColors } from '../theme';
 import { templatesStore } from '../store/templatesStore';
 import { campaignsStore } from '../store/campaignsStore';
+import { promotionsStore } from '../store/promotionsStore';
 import { clientsStore } from '../store/clientsStore';
 
 const STATUSES = ['', 'prospect', 'client', 'finalise'];
 
 export default function CampaignFormScreen({ route, navigation }) {
-  const { templateId } = route.params || {};
+  const { templateId, kind: initialKind } = route.params || {};
   const [templates, setTemplates] = useState([]);
+  const [promotions, setPromotions] = useState([]);
   const [allTags, setAllTags] = useState([]);
   const [name, setName] = useState('');
+  const [kind, setKind] = useState(initialKind || 'relance');
   const [selectedTemplate, setSelectedTemplate] = useState(templateId ? String(templateId) : '');
+  const [selectedPromotion, setSelectedPromotion] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterTag, setFilterTag] = useState('');
   const [recipientCount, setRecipientCount] = useState(0);
@@ -29,12 +33,18 @@ export default function CampaignFormScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
 
   const loadMeta = async () => {
-    const [tpls, clients] = await Promise.all([templatesStore.list(), clientsStore.getAll()]);
+    const [tpls, proms, clients] = await Promise.all([
+      templatesStore.list(),
+      promotionsStore.list({ activeOnly: true }),
+      clientsStore.getAll()
+    ]);
     setTemplates(tpls);
+    setPromotions(proms);
     const tagSet = new Set();
     clients.forEach((c) => (c.tags || []).forEach((t) => tagSet.add(t)));
     setAllTags([...tagSet].sort());
     if (!selectedTemplate && tpls.length > 0) setSelectedTemplate(String(tpls[0].id));
+    if (!selectedPromotion && proms.length > 0) setSelectedPromotion(String(proms[0].id));
   };
 
   useEffect(() => {
@@ -57,7 +67,9 @@ export default function CampaignFormScreen({ route, navigation }) {
       setSaving(true);
       await campaignsStore.create({
         name: name.trim(),
-        templateId: selectedTemplate ? Number(selectedTemplate) : null,
+        kind,
+        templateId: kind === 'marketing' && selectedPromotion ? null : selectedTemplate ? Number(selectedTemplate) : null,
+        promotionId: kind === 'marketing' && selectedPromotion ? Number(selectedPromotion) : null,
         filterStatus,
         filterTag
       });
@@ -88,13 +100,66 @@ export default function CampaignFormScreen({ route, navigation }) {
         placeholderTextColor={colors.textMuted}
       />
 
+      <Text style={styles.label}>Type de campagne</Text>
+      <View style={styles.kindRow}>
+        <TouchableOpacity
+          style={[styles.kindBtn, kind === 'relance' && styles.kindBtnActive]}
+          onPress={() => setKind('relance')}
+        >
+          <Text style={[styles.kindText, kind === 'relance' && styles.kindTextActive]}>Relance</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.kindBtn, kind === 'marketing' && styles.kindBtnActive]}
+          onPress={() => setKind('marketing')}
+        >
+          <Text style={[styles.kindText, kind === 'marketing' && styles.kindTextActive]}>Marketing</Text>
+        </TouchableOpacity>
+      </View>
+
+      {kind === 'marketing' ? (
+        <>
+          <View style={styles.tplHeader}>
+            <Text style={styles.label}>Promotion à promouvoir</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Promotions')}>
+              <Text style={styles.manageTpl}>Gérer les promotions</Text>
+            </TouchableOpacity>
+          </View>
+          {promotions.length === 0 ? (
+            <Text style={styles.empty}>Aucune promotion active. Créez-en une dans « Gérer les promotions ».</Text>
+          ) : (
+            promotions.map((p) => {
+              const selected = String(p.id) === selectedPromotion;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.tplRow, selected && styles.tplRowSelected]}
+                  onPress={() => setSelectedPromotion(String(p.id))}
+                >
+                  <View style={styles.tplBody}>
+                    <Text style={styles.tplName}>
+                      {p.title}{p.discount_label ? ` · ${p.discount_label}` : ''}
+                    </Text>
+                    <Text style={styles.tplBodyText} numberOfLines={2}>{p.body}</Text>
+                  </View>
+                  <View style={[styles.radio, selected && styles.radioActive]} />
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </>
+      ) : null}
+
       <View style={styles.tplHeader}>
         <Text style={styles.label}>Modèle de message</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Templates')}>
           <Text style={styles.manageTpl}>Gérer les modèles</Text>
         </TouchableOpacity>
       </View>
-      {templates.length === 0 ? (
+      {kind === 'marketing' && selectedPromotion ? (
+        <Text style={styles.empty}>
+          Le message viendra de la promotion sélectionnée ci-dessus.
+        </Text>
+      ) : templates.length === 0 ? (
         <Text style={styles.empty}>Aucun modèle. Créez-en un dans « Gérer les modèles ».</Text>
       ) : (
         templates.map((t) => {
@@ -177,6 +242,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   content: { padding: 20, paddingBottom: 40 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  kindRow: { flexDirection: 'row', gap: 8 },
+  kindBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: colors.incoming
+  },
+  kindBtnActive: { backgroundColor: colors.primaryDeep, borderColor: colors.primaryDeep },
+  kindText: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  kindTextActive: { color: '#fff' },
   label: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 16, marginBottom: 6 },
   input: {
     borderWidth: 1,

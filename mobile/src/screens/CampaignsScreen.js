@@ -14,7 +14,7 @@ export default function CampaignsScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       campaignsStore
-        .list()
+        .list({ kind: 'relance' })
         .then(setCampaigns)
         .finally(() => setLoading(false));
     }, [])

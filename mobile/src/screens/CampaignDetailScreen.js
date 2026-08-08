@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../theme';
-import { campaignsStore, CAMPAIGN_STATUSES, renderTemplate } from '../store/campaignsStore';
+import { campaignsStore, CAMPAIGN_STATUSES, campaignBody } from '../store/campaignsStore';
 import { api } from '../api';
 import Badge from '../components/Badge';
 
@@ -40,9 +40,7 @@ export default function CampaignDetailScreen({ route, navigation }) {
       Alert.alert('Numéro manquant', `${r.client_name} n'a pas de numéro.`);
       return;
     }
-    const message = campaign.template
-      ? renderTemplate(campaign.template.body, r)
-      : `Bonjour ${r.client_name},`;
+    const message = campaignBody(campaign, r);
     const chatId = api.phoneToChatId(r.client_phone);
     navigation.navigate('Chat', { chatId, title: r.client_name, initialText: message });
   };
@@ -72,6 +70,22 @@ export default function CampaignDetailScreen({ route, navigation }) {
 
   const firstClient = campaign.recipients[0] || null;
 
+  const measureReplies = async () => {
+    try {
+      const replies = await campaignsStore.measureReplies(campaignId);
+      if (replies.length === 0) {
+        Alert.alert('Statistiques', 'Aucune réponse détectée parmi les destinataires envoyés.');
+      } else {
+        Alert.alert(
+          `Retours reçus (${replies.length})`,
+          replies.map((r) => `${r.clientName} : ${r.count} réponse(s)`).join('\n')
+        );
+      }
+    } catch (err) {
+      Alert.alert('Mesure impossible', err.message);
+    }
+  };
+
   return (
     <FlatList
       style={styles.container}
@@ -93,13 +107,25 @@ export default function CampaignDetailScreen({ route, navigation }) {
             />
           </View>
 
-          {campaign.template ? (
+          {campaign.kind === 'marketing' ? (
+            <TouchableOpacity style={styles.statsLink} onPress={measureReplies}>
+              <Text style={styles.statsLinkText}>📊 Mesurer les retours reçus</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {campaign.promotion || campaign.template ? (
             <View style={styles.tplBox}>
-              <Text style={styles.tplLabel}>Modèle : {campaign.template.name}</Text>
+              <Text style={styles.tplLabel}>
+                {campaign.promotion
+                  ? `Promotion : ${campaign.promotion.title}${campaign.promotion.discount_label ? ` · ${campaign.promotion.discount_label}` : ''}`
+                  : `Modèle : ${campaign.template.name}`}
+              </Text>
               <Text style={styles.tplText}>
                 {firstClient
-                  ? renderTemplate(campaign.template.body, firstClient)
-                  : campaign.template.body}
+                  ? campaignBody(campaign, firstClient)
+                  : campaign.promotion
+                    ? campaign.promotion.body
+                    : campaign.template.body}
               </Text>
               {firstClient ? <Text style={styles.tplHint}>Aperçu pour {firstClient.client_name} — {firstClient.client_phone ? `+${firstClient.client_phone}` : ''}</Text> : null}
             </View>
@@ -179,6 +205,15 @@ const styles = StyleSheet.create({
   headerBody: { flex: 1 },
   name: { fontSize: 18, fontWeight: '800', color: colors.text },
   meta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  statsLink: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: colors.primaryDeep,
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center'
+  },
+  statsLinkText: { color: colors.primaryDeep, fontSize: 13, fontWeight: '700' },
   tplBox: {
     marginTop: 16,
     padding: 12,

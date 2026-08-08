@@ -18,6 +18,9 @@ import CampaignFormScreen from './src/screens/CampaignFormScreen';
 import CampaignDetailScreen from './src/screens/CampaignDetailScreen';
 import TemplatesScreen from './src/screens/TemplatesScreen';
 import TemplateFormScreen from './src/screens/TemplateFormScreen';
+import PromotionsScreen from './src/screens/PromotionsScreen';
+import PromotionFormScreen from './src/screens/PromotionFormScreen';
+import MarketingScreen from './src/screens/MarketingScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ContactScreen from './src/screens/ContactScreen';
 import InvoiceFormScreen from './src/screens/InvoiceFormScreen';
@@ -67,6 +70,12 @@ function HomeTabs({ onLogout }) {
         options={{ title: 'Relance', tabBarLabel: 'Relance', tabBarIcon: () => <Text style={tabStyles}>📢</Text> }}
       >
         {() => <CampaignsScreen />}
+      </Tab.Screen>
+      <Tab.Screen
+        name="Marketing"
+        options={{ title: 'Marketing', tabBarLabel: 'Marketing', tabBarIcon: () => <Text style={tabStyles}>📣</Text> }}
+      >
+        {(props) => <MarketingScreen {...props} onLogout={onLogout} />}
       </Tab.Screen>
       <Tab.Screen
         name="Settings"
@@ -151,6 +160,12 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="TemplateForm" options={{ title: 'Modèle de message' }}>
               {() => <TemplateFormScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="Promotions" options={{ title: 'Promotions' }}>
+              {() => <PromotionsScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="PromotionForm" options={{ title: 'Promotion' }}>
+              {() => <PromotionFormScreen />}
             </Stack.Screen>
           </>
         )}

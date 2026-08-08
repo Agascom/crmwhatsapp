@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Version du schéma : incrémenter à chaque évolution des tables.
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let db = null;
 
@@ -141,6 +141,25 @@ async function migrate(database) {
       CREATE INDEX IF NOT EXISTS idx_campaign_recipients_campaign ON campaign_recipients (campaign_id);
     `);
     await database.execAsync(`PRAGMA user_version = 4`);
+  }
+
+  if (current < 5) {
+    // Schéma v5 : promotions + campagnes marketing (Module « Marketing »).
+    await database.execAsync(`
+      ALTER TABLE campaigns ADD COLUMN kind TEXT NOT NULL DEFAULT 'relance';
+      ALTER TABLE campaigns ADD COLUMN promotion_id INTEGER;
+      CREATE TABLE IF NOT EXISTS promotions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        discount_label TEXT NOT NULL DEFAULT '',
+        valid_until INTEGER,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    await database.execAsync(`PRAGMA user_version = 5`);
   }
 
   // Migration unique des anciens contacts AsyncStorage vers la table clients.

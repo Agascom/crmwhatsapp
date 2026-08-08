@@ -1,5 +1,6 @@
 import { getDb } from '../db/database';
 import { clientsStore } from './clientsStore';
+import { api } from '../api';
 
 export const CAMPAIGN_STATUSES = { prepared: 'Préparée', in_progress: 'En cours', done: 'Terminée' };
 
@@ -11,16 +12,34 @@ export function renderTemplate(body, client) {
     .replace(/\{status\}/g, client.status || '');
 }
 
+// Corps du message d'une campagne : promotion si présente, sinon template, sinon repli.
+export function campaignBody(campaign, client) {
+  if (campaign && campaign.promotion && campaign.promotion.body) {
+    return renderTemplate(campaign.promotion.body, client);
+  }
+  if (campaign && campaign.template && campaign.template.body) {
+    return renderTemplate(campaign.template.body, client);
+  }
+  return `Bonjour ${client ? client.name : ''},`;
+}
+
 export const campaignsStore = {
-  async list() {
+  async list({ kind } = {}) {
     const db = await getDb();
+    const where = kind ? 'WHERE c.kind = ?' : '';
+    const params = kind ? [kind] : [];
     const rows = await db.getAllAsync(
       `SELECT c.*,
               (SELECT COUNT(*) FROM campaign_recipients r WHERE r.campaign_id = c.id) AS recipient_count,
               (SELECT COUNT(*) FROM campaign_recipients r WHERE r.campaign_id = c.id AND r.status = 'sent') AS sent_count,
-              t.name AS template_name
-       FROM campaigns c LEFT JOIN templates t ON t.id = c.template_id
-       ORDER BY c.created_at DESC`
+              t.name AS template_name,
+              p.title AS promotion_title
+       FROM campaigns c
+       LEFT JOIN templates t ON t.id = c.template_id
+       LEFT JOIN promotions p ON p.id = c.promotion_id
+       ${where}
+       ORDER BY c.created_at DESC`,
+      ...params
     );
     return rows;
   },
@@ -32,13 +51,16 @@ export const campaignsStore = {
     const template = camp.template_id
       ? await db.getFirstAsync('SELECT * FROM templates WHERE id = ?', camp.template_id)
       : null;
+    const promotion = camp.promotion_id
+      ? await db.getFirstAsync('SELECT * FROM promotions WHERE id = ?', camp.promotion_id)
+      : null;
     const recipients = await db.getAllAsync(
       `SELECT r.*, c.name AS client_name, c.phone AS client_phone, c.status AS client_status
        FROM campaign_recipients r LEFT JOIN clients c ON c.id = r.client_id
        WHERE r.campaign_id = ? ORDER BY c.name`,
       Number(id)
     );
-    return { ...camp, template, recipients };
+    return { ...camp, template, promotion, recipients };
   },
 
   // Calcule les destinataires selon le segment (statut + étiquette).
@@ -50,14 +72,16 @@ export const campaignsStore = {
       .map((c) => c.id);
   },
 
-  async create({ name, templateId = null, filterStatus = '', filterTag = '' }) {
+  async create({ name, templateId = null, promotionId = null, kind = 'relance', filterStatus = '', filterTag = '' }) {
     const db = await getDb();
     const now = Date.now();
     const result = await db.runAsync(
-      `INSERT INTO campaigns (name, template_id, status, filter_status, filter_tag, created_at, updated_at)
-       VALUES (?, ?, 'prepared', ?, ?, ?, ?)`,
+      `INSERT INTO campaigns (name, template_id, promotion_id, kind, status, filter_status, filter_tag, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'prepared', ?, ?, ?, ?)`,
       name,
       templateId ? Number(templateId) : null,
+      promotionId ? Number(promotionId) : null,
+      kind || 'relance',
       filterStatus || '',
       filterTag || '',
       now,
@@ -103,6 +127,33 @@ export const campaignsStore = {
       Date.now(),
       r.campaign_id
     );
+  },
+
+  // Mesure les retours : messages entrants des destinataires envoyés depuis l'envoi.
+  async measureReplies(campaignId) {
+    const camp = await this.get(campaignId);
+    if (!camp) return [];
+    const results = [];
+    for (const r of camp.recipients) {
+      if (r.status !== 'sent' || !r.client_phone) continue;
+      try {
+        const msgs = await api.getMessages(api.phoneToChatId(r.client_phone));
+        const since = r.sent_at || 0;
+        const incoming = msgs.filter(
+          (m) => !m.from_me && m.ts * 1000 > since && String(m.body || '').trim().length > 0
+        );
+        if (incoming.length > 0) {
+          results.push({
+            clientName: r.client_name,
+            count: incoming.length,
+            lastMessage: incoming[0].body
+          });
+        }
+      } catch (e) {
+        // Pas de session/disponibilité : on ignore ce destinataire.
+      }
+    }
+    return results;
   },
 
   async remove(id) {
