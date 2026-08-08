@@ -27,7 +27,11 @@
     ],
     "extra": {
       "owaUrl": "https://openwa.votre-domaine.com",
-      "owaApiKey": ""
+      "owaApiKey": "",
+      "businessName": "Mon Entreprise",
+      "businessLine1": "1 rue de l'Exemple, 75000 Paris",
+      "businessLine2": "contact@monentreprise.fr - +33 6 12 34 56 78",
+      "businessFooter": "Merci pour votre confiance."
     }
   }
 }

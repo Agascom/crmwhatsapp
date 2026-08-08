@@ -14,12 +14,27 @@ import { colors, statusColors } from '../theme';
 import { api, isAuthError } from '../api';
 import { remindersStore } from '../store/remindersStore';
 import { timelineStore } from '../store/timelineStore';
+import { invoicesStore, TYPE_LABELS, STATUS_LABELS } from '../store/invoicesStore';
 import Badge from '../components/Badge';
 import Section from '../components/Section';
 import TagInput from '../components/TagInput';
 import EmptyState from '../components/EmptyState';
 
 const STATUSES = ['prospect', 'client', 'finalise'];
+
+const INVOICE_STATUS_COLORS = {
+  draft: '#78909C',
+  sent: '#1E88E5',
+  accepted: '#43A047',
+  rejected: '#E53935',
+  paid: '#43A047',
+  overdue: '#E53935',
+  cancelled: '#78909C'
+};
+
+function fmtMoney(v) {
+  return `${Number(v || 0).toFixed(2).replace('.', ',')} €`;
+}
 
 const TIMELINE_ICONS = {
   created: '🆕',
@@ -71,13 +86,15 @@ export default function ContactScreen({ route, navigation, onLogout }) {
   const [timeline, setTimeline] = useState([]);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [invoices, setInvoices] = useState([]);
 
   const loadClientData = async () => {
     try {
-      const [c, r, t] = await Promise.all([
+      const [c, r, t, inv] = await Promise.all([
         api.getContact(id),
         remindersStore.list(id),
-        timelineStore.list(id)
+        timelineStore.list(id),
+        invoicesStore.listByClient(id)
       ]);
       setName(c.name);
       setPhone(c.phone || '');
@@ -86,6 +103,7 @@ export default function ContactScreen({ route, navigation, onLogout }) {
       setTags(c.tags || []);
       setReminders(r);
       setTimeline(t);
+      setInvoices(inv);
     } catch (err) {
       if (isAuthError(err)) onLogout();
       else Alert.alert('Erreur', err.message);
@@ -308,6 +326,46 @@ export default function ContactScreen({ route, navigation, onLogout }) {
             )}
           </Section>
 
+          <Section title="Devis & factures">
+            <View style={styles.invoiceHeader}>
+              <Text style={styles.invoiceCount}>
+                {invoices.length} document{invoices.length > 1 ? 's' : ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.newInvoiceBtn}
+                onPress={() =>
+                  navigation.navigate('InvoiceForm', {
+                    clientId: id,
+                    clientName: name || 'Client'
+                  })
+                }
+              >
+                <Text style={styles.newInvoiceText}>+ Nouveau</Text>
+              </TouchableOpacity>
+            </View>
+            {invoices.length === 0 ? (
+              <EmptyState text="Aucun devis ni facture pour ce client." />
+            ) : (
+              invoices.map((inv) => (
+                <TouchableOpacity
+                  key={inv.id}
+                  style={styles.invoiceRow}
+                  onPress={() => navigation.navigate('InvoiceDetail', { invoiceId: inv.id })}
+                >
+                  <View style={styles.invoiceBody}>
+                    <Text style={styles.invoiceTitle} numberOfLines={1}>
+                      {TYPE_LABELS[inv.type]} {inv.number}
+                    </Text>
+                    <Text style={styles.invoiceMeta}>
+                      {new Date(inv.issue_date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} · {fmtMoney(inv.total_ttc)}
+                    </Text>
+                  </View>
+                  <Badge label={STATUS_LABELS[inv.status]} color={INVOICE_STATUS_COLORS[inv.status]} />
+                </TouchableOpacity>
+              ))
+            )}
+          </Section>
+
           <Section title="Activité">
             {timeline.length === 0 ? (
               <EmptyState text="Aucune activité enregistrée pour l'instant." />
@@ -447,6 +505,32 @@ const styles = StyleSheet.create({
   historyBody: { flex: 1 },
   historyText: { fontSize: 14, color: colors.text },
   historyDate: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  invoiceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  invoiceCount: { color: colors.textMuted, fontSize: 12 },
+  newInvoiceBtn: {
+    borderWidth: 1,
+    borderColor: colors.primaryDeep,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  newInvoiceText: { color: colors.primaryDeep, fontSize: 13, fontWeight: '700' },
+  invoiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: 9,
+    gap: 10
+  },
+  invoiceBody: { flex: 1 },
+  invoiceTitle: { fontSize: 15, color: colors.text, fontWeight: '600' },
+  invoiceMeta: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   deleteButton: { marginTop: 24, alignItems: 'center', paddingVertical: 8 },
   deleteText: { color: colors.danger, fontSize: 15, fontWeight: '600' }
 });

@@ -198,6 +198,15 @@ export const api = {
     });
   },
 
+  // Envoie un document (PDF) en base64 via OpenWA — sans fichier public.
+  async sendDocument(chatId, { base64, filename, mimetype = 'application/pdf', caption = '' }) {
+    return withSession(async (sid) => {
+      const body = { chatId, base64, mimetype, filename };
+      if (caption) body.caption = caption;
+      return request(`/sessions/${sid}/messages/send-document`, { method: 'POST', body });
+    });
+  },
+
   async getContacts(search) {
     return clientsStore.search(search);
   },

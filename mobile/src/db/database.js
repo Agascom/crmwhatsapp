@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Version du schéma : incrémenter à chaque évolution des tables.
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let db = null;
 
@@ -58,6 +58,39 @@ async function migrate(database) {
       CREATE INDEX IF NOT EXISTS idx_reminders_client ON reminders (client_id);
     `);
     await database.execAsync(`PRAGMA user_version = 1`);
+  }
+
+  if (current < 2) {
+    // Schéma v2 : devis & factures (Module « Facturation »).
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL DEFAULT 'quote',
+        number TEXT NOT NULL,
+        client_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        currency TEXT NOT NULL DEFAULT 'EUR',
+        issue_date INTEGER NOT NULL,
+        due_date INTEGER,
+        notes TEXT NOT NULL DEFAULT '',
+        total_ht REAL NOT NULL DEFAULT 0,
+        total_ttc REAL NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        qty REAL NOT NULL DEFAULT 1,
+        unit_price REAL NOT NULL DEFAULT 0,
+        tva REAL NOT NULL DEFAULT 0,
+        total REAL NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices (client_id);
+      CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items (invoice_id);
+    `);
+    await database.execAsync(`PRAGMA user_version = 2`);
   }
 
   // Migration unique des anciens contacts AsyncStorage vers la table clients.

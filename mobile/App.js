@@ -14,6 +14,8 @@ import ContactsScreen from './src/screens/ContactsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ContactScreen from './src/screens/ContactScreen';
+import InvoiceFormScreen from './src/screens/InvoiceFormScreen';
+import InvoiceDetailScreen from './src/screens/InvoiceDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -109,6 +111,12 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="Contact" options={{ title: 'Fiche client' }}>
               {(props) => <ContactScreen {...props} onLogout={handleLogout} />}
+            </Stack.Screen>
+            <Stack.Screen name="InvoiceForm" options={{ title: 'Devis / Facture' }}>
+              {() => <InvoiceFormScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="InvoiceDetail" options={{ title: 'Document' }}>
+              {(props) => <InvoiceDetailScreen {...props} onLogout={handleLogout} />}
             </Stack.Screen>
           </>
         )}
