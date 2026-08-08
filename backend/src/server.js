@@ -1,9 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
-const pool = require('./db/pool');
-const app = require('./app');
-const registerWebhooks = require('./services/registerWebhooks');
 
 const LOG_FILE = path.join(__dirname, 'server.log');
 
@@ -25,6 +21,18 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   log('UNHANDLED REJECTION: ' + String(reason));
 });
+
+let config, pool, app, registerWebhooks;
+try {
+  config = require('./config');
+  pool = require('./db/pool');
+  app = require('./app');
+  registerWebhooks = require('./services/registerWebhooks');
+} catch (err) {
+  log('ECHEC CHARGEMENT MODULES: ' + (err && err.stack ? err.stack : String(err)));
+  log('CWD=' + process.cwd() + ' NODE=' + process.version + ' PORT=' + process.env.PORT);
+  process.exit(1);
+}
 
 async function start() {
   log('Demarrage... PORT=' + config.port);
