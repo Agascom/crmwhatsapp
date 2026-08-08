@@ -1,0 +1,1 @@
+{"version":3,"file":"session-restriction-metrics.js","sourceRoot":"","sources":["../../../src/common/metrics/session-restriction-metrics.ts"],"names":[],"mappings":";;AAYA,8DAEC;AAGD,8DAEC;AAVD,IAAI,kBAAkB,GAAG,CAAC,CAAC;AAG3B,SAAgB,yBAAyB,CAAC,KAAa;IACrD,kBAAkB,GAAG,KAAK,CAAC;AAC7B,CAAC;AAGD,SAAgB,yBAAyB;IACvC,OAAO,kBAAkB,CAAC;AAC5B,CAAC"}

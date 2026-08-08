@@ -1,0 +1,36 @@
+import { ConfigService } from '@nestjs/config';
+import { Repository } from 'typeorm';
+import { Session } from './entities/session.entity';
+export declare class SessionOwnershipService {
+    private readonly sessions;
+    private readonly configService?;
+    private readonly logger;
+    private heartbeat?;
+    private readonly owned;
+    private onLeaseLost?;
+    private lossDetectionSuspended;
+    private engineLiveness?;
+    constructor(sessions: Repository<Session>, configService?: ConfigService | undefined);
+    get nodeId(): string;
+    get nodeUrl(): string;
+    private get leaseTtlMs();
+    private get heartbeatMs();
+    claimableWhere(now?: Date): Array<Record<string, unknown>>;
+    claimable(ids: string[]): Promise<string[]>;
+    claim(sessionId: string): Promise<boolean>;
+    release(sessionId: string): Promise<void>;
+    releaseAll(): Promise<void>;
+    startHeartbeat(): void;
+    stopHeartbeat(): void;
+    onLeaseLoss(handler: (sessionIds: string[]) => Promise<void> | void): void;
+    suspendLossDetection(): () => void;
+    setEngineLiveness(probe: (sessionId: string) => boolean): void;
+    renew(): Promise<void>;
+    ownedByOtherLiveNode(session: Pick<Session, 'nodeId' | 'leaseExpiresAt'>, now?: Date): boolean;
+    lapsedHeldByOthers(now?: Date): Promise<Session[]>;
+    isHeldByOtherNode(sessionId: string, now?: Date): Promise<boolean>;
+    heldByOtherNodes(now?: Date): Promise<string[]>;
+    ownedIds(): string[];
+    owns(sessionId: string): boolean;
+}
+export declare const nodeOwnsSession: (ownership: Pick<SessionOwnershipService, "owns"> | undefined, sessionId: string) => boolean;

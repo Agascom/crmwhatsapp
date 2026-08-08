@@ -1,0 +1,169 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.applyDatabaseSection = applyDatabaseSection;
+exports.applyRedisSection = applyRedisSection;
+exports.applyStorageSection = applyStorageSection;
+exports.applyEngineSection = applyEngineSection;
+const common_1 = require("@nestjs/common");
+function setSecret(updates, key, value) {
+    if (value)
+        updates[key] = value;
+}
+function applyDatabaseSection(database, existing, ctx) {
+    const { updates, staleKeys, profiles } = ctx;
+    updates.DATABASE_TYPE = database.type || 'sqlite';
+    if (database.builtIn !== undefined) {
+        updates.POSTGRES_BUILTIN = database.builtIn ? 'true' : 'false';
+    }
+    const dbBuiltIn = database.builtIn ?? existing.POSTGRES_BUILTIN === 'true';
+    if (database.type === 'postgres') {
+        if (dbBuiltIn) {
+            updates.DATABASE_HOST = 'postgres';
+            updates.DATABASE_PORT = '5432';
+            updates.DATABASE_USERNAME = 'openwa';
+            const storedPassword = existing.POSTGRES_BUILTIN === 'true' ? existing.DATABASE_PASSWORD : undefined;
+            updates.DATABASE_PASSWORD = database.password || storedPassword || 'openwa';
+            updates.DATABASE_NAME = 'openwa';
+            updates.POSTGRES_SCHEMA = 'public';
+            profiles.push('postgres');
+        }
+        else {
+            if (database.builtIn === false && existing.POSTGRES_BUILTIN === 'true' && !database.password) {
+                staleKeys.add('DATABASE_PASSWORD');
+            }
+            if (database.host !== undefined)
+                updates.DATABASE_HOST = database.host || 'localhost';
+            if (database.port !== undefined)
+                updates.DATABASE_PORT = database.port || '5432';
+            if (database.username !== undefined)
+                updates.DATABASE_USERNAME = database.username || 'postgres';
+            setSecret(updates, 'DATABASE_PASSWORD', database.password);
+            if (database.database !== undefined)
+                updates.DATABASE_NAME = database.database || 'openwa';
+            if (database.schema !== undefined)
+                updates.POSTGRES_SCHEMA = database.schema || 'public';
+        }
+        if (database.poolSize !== undefined) {
+            updates.DATABASE_POOL_SIZE = String(database.poolSize || 10);
+        }
+        if (database.sslEnabled !== undefined) {
+            updates.DATABASE_SSL = database.sslEnabled ? 'true' : 'false';
+            if (database.sslEnabled) {
+                updates.DATABASE_SSL_REJECT_UNAUTHORIZED = database.sslRejectUnauthorized === false ? 'false' : 'true';
+            }
+        }
+    }
+    else {
+        updates.POSTGRES_BUILTIN = 'false';
+        for (const k of [
+            'DATABASE_HOST',
+            'DATABASE_PORT',
+            'DATABASE_USERNAME',
+            'DATABASE_PASSWORD',
+            'DATABASE_NAME',
+            'DATABASE_POOL_SIZE',
+            'DATABASE_SSL',
+            'DATABASE_SSL_REJECT_UNAUTHORIZED',
+            'POSTGRES_SCHEMA',
+        ]) {
+            staleKeys.add(k);
+        }
+    }
+}
+function applyRedisSection(redis, existing, ctx) {
+    const { updates, staleKeys, profiles } = ctx;
+    if (redis.enabled !== undefined)
+        updates.REDIS_ENABLED = redis.enabled ? 'true' : 'false';
+    if (redis.builtIn !== undefined)
+        updates.REDIS_BUILTIN = redis.builtIn ? 'true' : 'false';
+    if (redis.builtIn === true) {
+        updates.REDIS_HOST = 'redis';
+        updates.REDIS_PORT = '6379';
+        if (!redis.password)
+            staleKeys.add('REDIS_PASSWORD');
+    }
+    else {
+        if (redis.host !== undefined)
+            updates.REDIS_HOST = redis.host || 'localhost';
+        if (redis.port !== undefined)
+            updates.REDIS_PORT = redis.port || '6379';
+    }
+    setSecret(updates, 'REDIS_PASSWORD', redis.password);
+    const redisEnabled = redis.enabled ?? existing.REDIS_ENABLED === 'true';
+    const redisBuiltIn = redis.builtIn ?? existing.REDIS_BUILTIN === 'true';
+    if (redisEnabled && redisBuiltIn) {
+        profiles.push('redis');
+    }
+}
+function applyStorageSection(storage, existing, ctx) {
+    const { updates, staleKeys, profiles } = ctx;
+    updates.STORAGE_TYPE = storage.type || 'local';
+    if (storage.builtIn !== undefined) {
+        updates.MINIO_BUILTIN = storage.builtIn ? 'true' : 'false';
+    }
+    if (storage.type === 'local') {
+        updates.MINIO_BUILTIN = 'false';
+        if (storage.localPath !== undefined) {
+            updates.STORAGE_LOCAL_PATH = storage.localPath || './data/media';
+        }
+        for (const k of ['S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'S3_BUCKET', 'S3_REGION']) {
+            staleKeys.add(k);
+        }
+    }
+    else if (storage.type === 's3') {
+        staleKeys.add('STORAGE_LOCAL_PATH');
+        if (storage.builtIn === true) {
+            updates.S3_ENDPOINT = 'http://minio:9000';
+            updates.S3_ACCESS_KEY_ID = 'minioadmin';
+            updates.S3_SECRET_ACCESS_KEY = 'minioadmin';
+            updates.S3_BUCKET = 'openwa';
+            updates.S3_REGION = 'us-east-1';
+            profiles.push('minio');
+        }
+        else {
+            if (storage.builtIn === false && existing.MINIO_BUILTIN === 'true') {
+                if (!storage.s3AccessKey)
+                    staleKeys.add('S3_ACCESS_KEY_ID');
+                if (!storage.s3SecretKey)
+                    staleKeys.add('S3_SECRET_ACCESS_KEY');
+                if (!storage.s3Endpoint)
+                    staleKeys.add('S3_ENDPOINT');
+            }
+            if (storage.s3Bucket !== undefined)
+                updates.S3_BUCKET = storage.s3Bucket;
+            if (storage.s3Region !== undefined)
+                updates.S3_REGION = storage.s3Region || 'ap-southeast-1';
+            setSecret(updates, 'S3_ACCESS_KEY_ID', storage.s3AccessKey);
+            setSecret(updates, 'S3_SECRET_ACCESS_KEY', storage.s3SecretKey);
+            if (storage.s3Endpoint !== undefined) {
+                if (storage.s3Endpoint) {
+                    updates.S3_ENDPOINT = storage.s3Endpoint;
+                }
+                else {
+                    staleKeys.add('S3_ENDPOINT');
+                }
+            }
+        }
+    }
+}
+function applyEngineSection(engine, existing, ctx, engineFactory) {
+    const { updates } = ctx;
+    if (engine.type) {
+        const validEngineIds = engineFactory.getAvailableEngines().map(e => e.id);
+        if (!validEngineIds.includes(engine.type)) {
+            throw new common_1.BadRequestException(`Unknown engine type: ${engine.type}`);
+        }
+        updates.ENGINE_TYPE = engine.type;
+    }
+    if (engine.headless !== undefined) {
+        updates.PUPPETEER_HEADLESS = engine.headless ? 'true' : 'false';
+    }
+    if (engine.sessionDataPath !== undefined) {
+        updates.SESSION_DATA_PATH = engine.sessionDataPath || './data/sessions';
+    }
+    if (engine.browserArgs !== undefined) {
+        updates.PUPPETEER_ARGS =
+            engine.browserArgs || '--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu';
+    }
+}
+//# sourceMappingURL=config-sections.js.map
