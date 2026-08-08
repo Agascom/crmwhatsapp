@@ -26,6 +26,9 @@ import ContactScreen from './src/screens/ContactScreen';
 import InvoiceFormScreen from './src/screens/InvoiceFormScreen';
 import InvoiceDetailScreen from './src/screens/InvoiceDetailScreen';
 import PaymentFormScreen from './src/screens/PaymentFormScreen';
+import PipelineScreen from './src/screens/PipelineScreen';
+import OpportunityScreen from './src/screens/OpportunityScreen';
+import ImportScreen from './src/screens/ImportScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -76,6 +79,12 @@ function HomeTabs({ onLogout }) {
         options={{ title: 'Marketing', tabBarLabel: 'Marketing', tabBarIcon: () => <Text style={tabStyles}>📣</Text> }}
       >
         {(props) => <MarketingScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
+      <Tab.Screen
+        name="Pipeline"
+        options={{ title: 'Pipeline', tabBarLabel: 'Pipeline', tabBarIcon: () => <Text style={tabStyles}>🎯</Text> }}
+      >
+        {(props) => <PipelineScreen {...props} onLogout={onLogout} />}
       </Tab.Screen>
       <Tab.Screen
         name="Settings"
@@ -166,6 +175,12 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="PromotionForm" options={{ title: 'Promotion' }}>
               {() => <PromotionFormScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="Opportunity" options={{ title: 'Opportunité' }}>
+              {(props) => <OpportunityScreen {...props} onLogout={handleLogout} />}
+            </Stack.Screen>
+            <Stack.Screen name="Import" options={{ title: 'Importer des contacts' }}>
+              {() => <ImportScreen />}
             </Stack.Screen>
           </>
         )}

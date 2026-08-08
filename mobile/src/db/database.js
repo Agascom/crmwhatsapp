@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Version du schéma : incrémenter à chaque évolution des tables.
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let db = null;
 
@@ -160,6 +160,39 @@ async function migrate(database) {
       );
     `);
     await database.execAsync(`PRAGMA user_version = 5`);
+  }
+
+  if (current < 6) {
+    // Schéma v6 : opportunités (pipeline de vente) et réglages (Module « Acquisition »).
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS opportunities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL UNIQUE,
+        stage TEXT NOT NULL DEFAULT 'new',
+        value REAL NOT NULL DEFAULT 0,
+        expected_close INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    const stages = JSON.stringify([
+      { key: 'new', label: 'Nouveau', color: '#78909C' },
+      { key: 'contacted', label: 'Contacté', color: '#1E88E5' },
+      { key: 'meeting', label: 'Rendez-vous', color: '#FFA000' },
+      { key: 'quoted', label: 'Devis envoyé', color: '#8E24AA' },
+      { key: 'won', label: 'Gagné', color: '#43A047' },
+      { key: 'lost', label: 'Perdu', color: '#E53935' }
+    ]);
+    await database.runAsync(
+      'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
+      'pipeline_stages',
+      stages
+    );
+    await database.execAsync(`PRAGMA user_version = 6`);
   }
 
   // Migration unique des anciens contacts AsyncStorage vers la table clients.
