@@ -7,12 +7,51 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Switch
 } from 'react-native';
 import { colors, statusColors } from '../theme';
 import { api, isAuthError } from '../api';
+import { remindersStore } from '../store/remindersStore';
+import { timelineStore } from '../store/timelineStore';
+import Badge from '../components/Badge';
+import Section from '../components/Section';
+import TagInput from '../components/TagInput';
+import EmptyState from '../components/EmptyState';
 
 const STATUSES = ['prospect', 'client', 'finalise'];
+
+const TIMELINE_ICONS = {
+  created: '🆕',
+  status: '🔄',
+  note: '📝',
+  tags: '🏷️',
+  reminder: '⏰',
+  reminder_done: '✅',
+  message: '💬'
+};
+
+function formatDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+
+function dueLabel(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+const DUE_OPTIONS = [
+  { label: "Aujourd'hui", days: 0 },
+  { label: 'Demain', days: 1 },
+  { label: 'Semaine', days: 7 }
+];
 
 export default function ContactScreen({ route, navigation, onLogout }) {
   const { id, phone: prefilledPhone, name: prefilledName } = route.params || {};
@@ -22,38 +61,75 @@ export default function ContactScreen({ route, navigation, onLogout }) {
   const [phone, setPhone] = useState(prefilledPhone || '');
   const [status, setStatus] = useState('prospect');
   const [notes, setNotes] = useState('');
+  const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (isEdit) {
-      api
-        .getContact(id)
-        .then((c) => {
-          setName(c.name);
-          setPhone(c.phone || '');
-          setStatus(c.status || 'prospect');
-          setNotes(c.notes || '');
-        })
-        .catch((err) => {
-          if (isAuthError(err)) onLogout();
-          else Alert.alert('Erreur', err.message);
-        })
-        .finally(() => setLoading(false));
+  const [reminders, setReminders] = useState([]);
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderDue, setReminderDue] = useState(DUE_OPTIONS[1].days);
+  const [timeline, setTimeline] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const loadClientData = async () => {
+    try {
+      const [c, r, t] = await Promise.all([
+        api.getContact(id),
+        remindersStore.list(id),
+        timelineStore.list(id)
+      ]);
+      setName(c.name);
+      setPhone(c.phone || '');
+      setStatus(c.status || 'prospect');
+      setNotes(c.notes || '');
+      setTags(c.tags || []);
+      setReminders(r);
+      setTimeline(t);
+    } catch (err) {
+      if (isAuthError(err)) onLogout();
+      else Alert.alert('Erreur', err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [id, isEdit, onLogout]);
+  };
+
+  useEffect(() => {
+    if (isEdit) loadClientData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isEdit]);
+
+  const loadHistory = async (clientPhone) => {
+    if (!clientPhone) return;
+    setHistoryLoading(true);
+    try {
+      const chatId = api.phoneToChatId(clientPhone);
+      const msgs = await api.getMessages(chatId);
+      setHistory(msgs.slice(-20).reverse());
+    } catch (err) {
+      // L'historique est un bonus : on n'interrompt pas la fiche en cas d'erreur.
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isEdit && phone) loadHistory(phone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, id]);
 
   const save = async () => {
     if (!name.trim()) {
-      Alert.alert('Nom requis', 'Le nom du contact est obligatoire.');
+      Alert.alert('Nom requis', 'Le nom du client est obligatoire.');
       return;
     }
     try {
       setSaving(true);
       if (isEdit) {
-        await api.updateContact(id, { name: name.trim(), phone, status, notes });
+        const updated = await api.updateContact(id, { name: name.trim(), phone, status, notes, tags });
+        if (updated && updated.phone !== phone) setPhone(updated.phone);
       } else {
-        await api.createContact({ name: name.trim(), phone, status, notes });
+        await api.createContact({ name: name.trim(), phone, status, notes, tags });
       }
       navigation.goBack();
     } catch (err) {
@@ -63,10 +139,33 @@ export default function ContactScreen({ route, navigation, onLogout }) {
     }
   };
 
+  const addReminder = async () => {
+    if (!reminderTitle.trim()) {
+      Alert.alert('Titre requis', 'Donnez un titre au rappel.');
+      return;
+    }
+    const dueAt = Date.now() + reminderDue * 24 * 60 * 60 * 1000;
+    await remindersStore.add(id, reminderTitle.trim(), dueAt);
+    setReminderTitle('');
+    setReminders(await remindersStore.list(id));
+    setTimeline(await timelineStore.list(id));
+  };
+
+  const toggleReminder = async (rem) => {
+    await remindersStore.toggle(rem.id, !rem.done);
+    setReminders(await remindersStore.list(id));
+    setTimeline(await timelineStore.list(id));
+  };
+
+  const removeReminder = async (rem) => {
+    await remindersStore.remove(rem.id);
+    setReminders(await remindersStore.list(id));
+  };
+
   const remove = () => {
     Alert.alert(
       'Supprimer le contact',
-      `Confirmer la suppression de « ${name} » ?`,
+      `Confirmer la suppression de « ${name} » ? Les rappels et l'historique seront aussi supprimés.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -82,7 +181,7 @@ export default function ContactScreen({ route, navigation, onLogout }) {
   };
 
   const openChat = () => {
-    const chatId = `${phone.replace(/[^0-9]/g, '')}@c.us`;
+    const chatId = api.phoneToChatId(phone);
     navigation.navigate('Chat', { chatId, title: name });
   };
 
@@ -132,11 +231,14 @@ export default function ContactScreen({ route, navigation, onLogout }) {
         multiline
       />
 
+      <Text style={styles.label}>Étiquettes</Text>
+      <TagInput tags={tags} onChange={setTags} />
+
       <TouchableOpacity style={styles.saveButton} onPress={save} disabled={saving}>
         {saving ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.saveText}>{isEdit ? 'Enregistrer' : 'Créer le contact'}</Text>
+          <Text style={styles.saveText}>{isEdit ? 'Enregistrer' : 'Créer le client'}</Text>
         )}
       </TouchableOpacity>
 
@@ -147,9 +249,108 @@ export default function ContactScreen({ route, navigation, onLogout }) {
       ) : null}
 
       {isEdit ? (
-        <TouchableOpacity style={styles.deleteButton} onPress={remove}>
-          <Text style={styles.deleteText}>Supprimer le contact</Text>
-        </TouchableOpacity>
+        <>
+          <Section title="Rappels & relances">
+            <Text style={styles.hint}>
+              Les rappels restent internes : aucun envoi automatique, vous relancez vous-même depuis la conversation.
+            </Text>
+            <View style={styles.reminderForm}>
+              <TextInput
+                style={[styles.input, styles.reminderInput]}
+                value={reminderTitle}
+                onChangeText={setReminderTitle}
+                placeholder="Titre du rappel (ex. relance devis)"
+                placeholderTextColor={colors.textMuted}
+              />
+              <View style={styles.dueRow}>
+                {DUE_OPTIONS.map((o) => (
+                  <TouchableOpacity
+                    key={o.label}
+                    style={[styles.dueBtn, reminderDue === o.days && styles.dueBtnActive]}
+                    onPress={() => setReminderDue(o.days)}
+                  >
+                    <Text style={[styles.dueText, reminderDue === o.days && styles.dueTextActive]}>
+                      {o.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.addReminderBtn} onPress={addReminder}>
+                <Text style={styles.addReminderText}>+ Ajouter le rappel</Text>
+              </TouchableOpacity>
+            </View>
+
+            {reminders.length === 0 ? (
+              <EmptyState text="Aucun rappel planifié pour ce client." />
+            ) : (
+              reminders.map((r) => (
+                <View key={r.id} style={styles.reminderRow}>
+                  <Switch
+                    value={Boolean(r.done)}
+                    onValueChange={() => toggleReminder(r)}
+                    trackColor={{ true: colors.primary, false: colors.border }}
+                    thumbColor="#fff"
+                  />
+                  <View style={styles.reminderBody}>
+                    <Text
+                      style={[styles.reminderTitle, r.done && styles.reminderDone]}
+                      numberOfLines={1}
+                    >
+                      {r.title}
+                    </Text>
+                    <Text style={styles.reminderDue}>{dueLabel(r.due_at)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeReminder(r)}>
+                    <Text style={styles.removeText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </Section>
+
+          <Section title="Activité">
+            {timeline.length === 0 ? (
+              <EmptyState text="Aucune activité enregistrée pour l'instant." />
+            ) : (
+              timeline.map((e) => (
+                <View key={e.id} style={styles.timelineRow}>
+                  <Text style={styles.timelineIcon}>{TIMELINE_ICONS[e.type] || '•'}</Text>
+                  <View style={styles.timelineBody}>
+                    <Text style={styles.timelineTitle}>{e.title}</Text>
+                    {e.detail ? <Text style={styles.timelineDetail} numberOfLines={1}>{e.detail}</Text> : null}
+                    <Text style={styles.timelineDate}>{formatDate(e.created_at)}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </Section>
+
+          <Section title="Conversation WhatsApp">
+            {!phone ? (
+              <EmptyState text="Ajoutez un numéro pour afficher l'historique." />
+            ) : historyLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginVertical: 8 }} />
+            ) : history.length === 0 ? (
+              <EmptyState text="Aucun message trouvé avec ce numéro." />
+            ) : (
+              history.map((m) => (
+                <View key={m.id} style={styles.historyRow}>
+                  <Text style={styles.historyIcon}>{m.from_me ? '➡️' : '⬅️'}</Text>
+                  <View style={styles.historyBody}>
+                    <Text style={styles.historyText} numberOfLines={2}>{m.body}</Text>
+                    <Text style={styles.historyDate}>
+                      {m.from_me ? 'Vous' : 'Client'} · {formatDate(m.ts * 1000)}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </Section>
+
+          <TouchableOpacity style={styles.deleteButton} onPress={remove}>
+            <Text style={styles.deleteText}>Supprimer le client</Text>
+          </TouchableOpacity>
+        </>
       ) : null}
     </ScrollView>
   );
@@ -157,7 +358,7 @@ export default function ContactScreen({ route, navigation, onLogout }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  content: { padding: 20 },
+  content: { padding: 20, paddingBottom: 40 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 16, marginBottom: 6 },
   input: {
@@ -199,6 +400,53 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   chatText: { color: colors.primaryDeep, fontSize: 16, fontWeight: '700' },
+  hint: { color: colors.textMuted, fontSize: 12, marginBottom: 10, lineHeight: 17 },
+  reminderForm: { gap: 8, marginBottom: 8 },
+  reminderInput: {},
+  dueRow: { flexDirection: 'row', gap: 8 },
+  dueBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingVertical: 7,
+    alignItems: 'center',
+    backgroundColor: colors.incoming
+  },
+  dueBtnActive: { backgroundColor: colors.primaryDeep, borderColor: colors.primaryDeep },
+  dueText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  dueTextActive: { color: '#fff' },
+  addReminderBtn: {
+    backgroundColor: colors.primaryDeep,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center'
+  },
+  addReminderText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: 8,
+    gap: 10
+  },
+  reminderBody: { flex: 1 },
+  reminderTitle: { fontSize: 15, color: colors.text, fontWeight: '600' },
+  reminderDone: { textDecorationLine: 'line-through', color: colors.textMuted },
+  reminderDue: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  removeText: { color: colors.danger, fontSize: 16, padding: 4 },
+  timelineRow: { flexDirection: 'row', paddingVertical: 7, gap: 10 },
+  timelineIcon: { fontSize: 16, width: 22 },
+  timelineBody: { flex: 1 },
+  timelineTitle: { fontSize: 14, color: colors.text, fontWeight: '600' },
+  timelineDetail: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
+  timelineDate: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  historyRow: { flexDirection: 'row', paddingVertical: 7, gap: 10 },
+  historyIcon: { fontSize: 16, width: 22 },
+  historyBody: { flex: 1 },
+  historyText: { fontSize: 14, color: colors.text },
+  historyDate: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   deleteButton: { marginTop: 24, alignItems: 'center', paddingVertical: 8 },
   deleteText: { color: colors.danger, fontSize: 15, fontWeight: '600' }
 });

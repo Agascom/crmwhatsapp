@@ -12,6 +12,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors, statusColors } from '../theme';
 import { api, isAuthError } from '../api';
 
+const TAG_COLORS = ['#128C7E', '#FFA000', '#1E88E5', '#8E24AA', '#D81B60', '#43A047'];
+
 export default function ContactsScreen({ navigation, onLogout }) {
   const [contacts, setContacts] = useState([]);
   const [search, setSearch] = useState('');
@@ -69,6 +71,20 @@ export default function ContactsScreen({ navigation, onLogout }) {
       <View style={styles.body}>
         <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.phone}>{item.phone}</Text>
+        {item.tags && item.tags.length > 0 ? (
+          <View style={styles.tagRow}>
+            {item.tags.slice(0, 3).map((t, i) => (
+              <Text
+                key={t}
+                style={[styles.tag, { backgroundColor: TAG_COLORS[i % TAG_COLORS.length] }]}
+                numberOfLines={1}
+              >
+                {t}
+              </Text>
+            ))}
+            {item.tags.length > 3 ? <Text style={styles.tagMore}>+{item.tags.length - 3}</Text> : null}
+          </View>
+        ) : null}
       </View>
       <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] || colors.textMuted }]}>
         <Text style={styles.statusText}>{item.status}</Text>
@@ -100,7 +116,7 @@ export default function ContactsScreen({ navigation, onLogout }) {
       />
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('ContactForm', {})}
+        onPress={() => navigation.navigate('Contact', {})}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
@@ -141,6 +157,18 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   name: { fontSize: 16, fontWeight: '600', color: colors.text },
   phone: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  tag: {
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    overflow: 'hidden',
+    maxWidth: 90
+  },
+  tagMore: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
   statusBadge: {
     borderRadius: 10,
     paddingHorizontal: 10,

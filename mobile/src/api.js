@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
-import { contactsStore } from './contactsStore';
+import { clientsStore } from './store/clientsStore';
 
 const URL_KEY = 'owa_url';
 const KEY_KEY = 'owa_api_key';
@@ -146,11 +146,11 @@ export const api = {
 
   async getConversations() {
     return withSession(async (sid) => {
-      const [chats, contacts] = await Promise.all([
+      const [chats, clients] = await Promise.all([
         request(`/sessions/${sid}/chats?limit=100`),
-        contactsStore.getAll()
+        clientsStore.getAll()
       ]);
-      const byPhone = new Map(contacts.map((c) => [c.phone, c]));
+      const byPhone = new Map(clients.map((c) => [c.phone, c]));
       return chats.map((c) => {
         const phone = chatToPhone(c.id);
         const contact = byPhone.get(phone) || null;
@@ -199,30 +199,25 @@ export const api = {
   },
 
   async getContacts(search) {
-    const all = await contactsStore.getAll();
-    const term = (search || '').trim().toLowerCase();
-    if (!term) return all;
-    return all.filter((c) =>
-      (c.name || '').toLowerCase().includes(term) || (c.phone || '').includes(term)
-    );
+    return clientsStore.search(search);
   },
 
   async getContact(id) {
-    const c = await contactsStore.get(id);
+    const c = await clientsStore.get(id);
     if (!c) throw new ApiError('Contact introuvable', 404);
     return c;
   },
 
   async createContact(data) {
-    return contactsStore.create(data);
+    return clientsStore.create(data);
   },
 
   async updateContact(id, data) {
-    return contactsStore.update(id, data);
+    return clientsStore.update(id, data);
   },
 
   async deleteContact(id) {
-    return contactsStore.remove(id);
+    return clientsStore.remove(id);
   },
 
   async checkNumber(phone) {
