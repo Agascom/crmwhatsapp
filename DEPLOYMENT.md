@@ -84,7 +84,11 @@ npm run build
 2. Dans hPanel : **Add Website → Node.js web app → Import Git repository**.
 3. Sélectionnez le dépôt → **Root directory : `openwa`**.
 4. Node.js version : **22**.
-5. Build command : `npm run build`.
+5. **Build command : laisser vide** — le dossier `dist/` pré-compilé est déjà committé (le build TypeScript `nest build` échoue en mémoire limitée sur le mutualisé). En cas de modification du code, régénérez `dist/` en local puis committez :
+   ```bash
+   cd openwa && npm ci && npm run build && cd ..
+   git add openwa/dist && git commit -m "openwa: regen dist" && git push
+   ```
 6. Entry file : `dist/main.js`.
 7. Dans **Variables d'environnement** : `ENGINE_TYPE=baileys`, `DATABASE_TYPE=sqlite`, `NODE_ENV=production` (Hostinger injecte aussi `PORT`).
 8. **Deploy**, puis ouvrez `https://openwa.votre-domaine.com` → dashboard OpenWA.
