@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { colors } from './src/theme';
-import { getToken, setToken } from './src/api';
+import { isConfigured, clearConfig } from './src/api';
 
 import LoginScreen from './src/screens/LoginScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
@@ -58,20 +58,20 @@ function HomeTabs({ onLogout }) {
 }
 
 export default function App() {
-  const [token, setTokenState] = useState(null);
+  const [configured, setConfigured] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getToken().then((t) => {
-      setTokenState(t);
+    isConfigured().then((c) => {
+      setConfigured(c);
       setLoading(false);
     });
   }, []);
 
-  const handleLogin = () => getToken().then(setTokenState);
+  const handleLogin = async () => setConfigured(await isConfigured());
   const handleLogout = async () => {
-    await setToken(null);
-    setTokenState(null);
+    await clearConfig();
+    setConfigured(false);
   };
 
   if (loading) {
@@ -92,7 +92,7 @@ export default function App() {
           headerTitleStyle: { fontWeight: '700' }
         }}
       >
-        {!token ? (
+        {!configured ? (
           <Stack.Screen name="Login" options={{ headerShown: false }}>
             {() => <LoginScreen onLogin={handleLogin} />}
           </Stack.Screen>

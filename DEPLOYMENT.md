@@ -1,12 +1,13 @@
 # Déploiement
 
-Ce guide couvre le déploiement complet : **OpenWA**, le **backend CRM** et l'**app mobile**, sur l'hébergement mutualisé Hostinger. Il reflète la configuration validée pendant le développement (les pièges rencontrés sont intégrés directement).
+Ce guide couvre le déploiement : **OpenWA** (la passerelle WhatsApp) et l'**app mobile**, qui **se connecte directement à l'API OpenWA** — sans backend intermédiaire.
+
+> **Architecture « directe »** : l'app mobile appelle `https://openwa.votre-domaine.com/api/...` avec la clé API OpenWA. Les contacts sont stockés sur le téléphone (AsyncStorage). Les nouveaux messages arrivent par **polling** (l'app rafraîchit toutes les ~5 s). Aucun serveur applicatif n'est nécessaire — uniquement OpenWA.
 
 ## Prérequis Hostinger
 
 - Hébergement **mutualisé Business** (ou supérieur) — le support Node.js « Web Apps » est requis.
-- Un nom de domaine + sous-domaines : `crm.votre-domaine.com` (backend) et `openwa.votre-domaine.com` (passerelle).
-- Une base de données **PostgreSQL Neon** (gratuite, distante, accès SSL) — l'accès MySQL local du mutualisé échouait (`Access denied`), Neon est accessible depuis n'importe où.
+- Un nom de domaine + sous-domaine : `openwa.votre-domaine.com` (passerelle WhatsApp).
 - Un compte **GitHub** (déploiement automatique).
 
 ---
@@ -21,10 +22,11 @@ Structure :
 
 ```
 crm-whatsapp/
-├── backend/     → Web App n°1 (Root directory: backend)
-├── openwa/      → Web App n°2 (Root directory: openwa)  ← OpenWA v0.14.6 sans Docker
-└── mobile/      → versionné seulement, non déployé chez Hostinger
+├── mobile/      → l'app (Expo), se connecte directement à OpenWA
+└── openwa/      → Web App Hostinger (Root directory: openwa)  ← OpenWA v0.14.6 sans Docker
 ```
+
+> Le dossier `backend/` est conservé mais **n'est plus utilisé** : l'app mobile parle directement à OpenWA.
 
 ### 0.1 Règles d'or
 
@@ -98,11 +100,13 @@ Le mutualisé peut « endormir » le process inactif → WhatsApp se déconnecte
 curl -s https://openwa.votre-domaine.com/api/health > /dev/null 2>&1
 ```
 
-> ⚠️ La clé API OpenWA va **uniquement** dans les variables d'environnement du backend CRM. Jamais dans l'app mobile.
+> ⚠️ La clé API OpenWA est saisie dans l'app mobile (premier lancement) et stockée sur le téléphone — elle ne doit apparaître dans aucun dépôt public.
 
 ---
 
-## 2. Déployer le backend CRM
+## 2. Backend CRM (optionnel — non utilisé par l'app)
+
+> Depuis la version « connexion directe », l'app mobile n'a **plus besoin** du backend. Cette section ne sert que si vous souhaitez conserver une API dédiée plus tard.
 
 ### 2.1 Variables d'environnement (hPanel)
 
@@ -144,23 +148,25 @@ curl -s https://openwa.votre-domaine.com/api/health > /dev/null 2>&1
 
 ---
 
-## 3. App mobile
+## 3. App mobile (connexion directe OpenWA)
 
 1. `cd mobile` puis `npm install`.
-2. Dans `app.json`, renseignez `extra.apiUrl` avec `https://crm.votre-domaine.com`.
+2. Dans `app.json`, renseignez `extra.owaUrl` avec l'URL d'OpenWA (ex. `https://openwa.votre-domaine.com`). Vous pouvez aussi y pré-remplir `extra.owaApiKey` (déconseillé : la clé serait alors présente dans le binaire).
 3. `npx expo start`, testez avec **Expo Go** sur votre téléphone.
-4. Pour un APK autonome : `npx expo run:android` ou un build EAS (`npx eas build --profile preview`).
+4. Au premier lancement, saisissez **l'adresse OpenWA** et la **clé API** (menu API Keys du dashboard OpenWA, rôle **OPERATOR** pour envoyer des messages). Elles sont mémorisées sur le téléphone (SecureStore).
+5. Pour un APK autonome : `npx expo run:android` ou un build EAS (`npx eas build --profile preview`).
 
-L'écran de connexion permet aussi de modifier l'adresse du serveur depuis le téléphone.
+L'écran de connexion et les Paramètres permettent de modifier l'adresse et la clé depuis le téléphone.
+
+> **Limites sans backend** : les messages entrants apparaissent au polling (~5 s) quand l'app est ouverte ; pas de notifications push en arrière-plan. Les contacts (statuts prospect/client/finalisé) sont stockés localement sur le téléphone. La clé API est embarquée dans l'app → toute personne avec l'APK peut l'extraire ; elle ne donne accès qu'à la session WhatsApp (pas au téléphone ni à WhatsApp).
 
 ---
 
 ## Ordre de mise en route
 
-1. Déployer **OpenWA** + connecter le numéro (QR) + récupérer la clé API.
-2. Déployer le **backend** (avec clé API + webhook).
-3. Vérifier `health` + les logs webhooks.
-4. Installer et tester l'**app mobile**.
+1. Déployer **OpenWA** + connecter le numéro (QR) + récupérer la clé API (rôle OPERATOR).
+2. Installer et tester l'**app mobile** (saisir URL + clé au premier lancement).
+3. Optionnel : garder OpenWA éveillé avec le cron §1.4.
 
 ## Dépannage rapide
 
@@ -169,6 +175,6 @@ L'écran de connexion permet aussi de modifier l'adresse du serveur depuis le t�
 | Échec d'installation `EBADENGINE` | Normal, neutralisé par `.npmrc` / `NPM_CONFIG_ENGINE_STRICT=false` — vérifier que le déploiement continue |
 | Échec de **compilation** | Build command doit être **vide** (dossier `dist/` committé) |
 | `Aucune session WhatsApp prête` | Le numéro n'est pas connecté dans le dashboard OpenWA |
-| Webhooks non enregistrés | Vérifier `PUBLIC_URL` (doit être HTTPS et public) et que la clé API a le rôle OPERATOR |
-| L'app ne reçoit pas les messages | Vérifier le cron de maintien OpenWA + les logs du backend |
-| Erreur de connexion Neon au démarrage | Vérifier `DATABASE_URL` (SSL obligatoire, `sslmode=require`) dans hPanel ; le backend écrit les erreurs dans `server.log` |
+| `Clé API invalide` dans l'app | Vérifier la clé dans Paramètres (dashboard OpenWA → API Keys) |
+| Envoi refusé (403) | La clé API doit avoir le rôle **OPERATOR** |
+| L'app ne voit pas les nouveaux messages | Vérifier le cron de maintien OpenWA + que l'app reste ouverte (polling ~5 s) |

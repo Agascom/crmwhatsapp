@@ -10,16 +10,20 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../theme';
-import { api, getApiUrl, setApiUrl, isAuthError } from '../api';
+import { api, getConfig, setConfig, isAuthError } from '../api';
 
 export default function SettingsScreen({ onLogout }) {
   const [apiUrl, setUrl] = useState('');
+  const [apiKey, setKey] = useState('');
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      getApiUrl().then(setUrl);
+      getConfig().then((cfg) => {
+        if (cfg.url) setUrl(cfg.url);
+        if (cfg.key) setKey(cfg.key);
+      });
       loadSessions();
     }, [])
   );
@@ -36,14 +40,23 @@ export default function SettingsScreen({ onLogout }) {
     }
   };
 
-  const saveUrl = async () => {
-    if (!apiUrl.trim()) return;
-    await setApiUrl(apiUrl.trim());
-    Alert.alert('Enregistré', 'Adresse du serveur mise à jour.');
+  const saveConfig = async () => {
+    if (!apiUrl.trim() || !apiKey.trim()) {
+      Alert.alert('Champs requis', 'L\'adresse et la clé API sont requises.');
+      return;
+    }
+    try {
+      await setConfig({ url: apiUrl.trim(), key: apiKey.trim() });
+      await api.connect();
+      Alert.alert('Enregistré', 'Configuration mise à jour.');
+      loadSessions();
+    } catch (err) {
+      Alert.alert('Impossible de se connecter', err.message || 'Erreur réseau');
+    }
   };
 
   const confirmLogout = () => {
-    Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
+    Alert.alert('Déconnexion', 'Voulez-vous vraiment effacer la configuration ?', [
       { text: 'Annuler', style: 'cancel' },
       { text: 'Se déconnecter', style: 'destructive', onPress: onLogout }
     ]);
@@ -51,10 +64,27 @@ export default function SettingsScreen({ onLogout }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Serveur</Text>
-      <TextInput style={styles.input} value={apiUrl} onChangeText={setUrl} autoCapitalize="none" />
-      <TouchableOpacity style={styles.saveButton} onPress={saveUrl}>
-        <Text style={styles.saveText}>Enregistrer l'adresse</Text>
+      <Text style={styles.sectionTitle}>Serveur OpenWA</Text>
+      <TextInput
+        style={styles.input}
+        value={apiUrl}
+        onChangeText={setUrl}
+        placeholder="https://openwa.votre-domaine.com"
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+      />
+      <TextInput
+        style={styles.input}
+        value={apiKey}
+        onChangeText={setKey}
+        placeholder="owa_k1_..."
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+      />
+      <TouchableOpacity style={styles.saveButton} onPress={saveConfig}>
+        <Text style={styles.saveText}>Enregistrer la configuration</Text>
       </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>Connexion WhatsApp</Text>
@@ -77,7 +107,7 @@ export default function SettingsScreen({ onLogout }) {
       )}
 
       <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
-        <Text style={styles.logoutText}>Se déconnecter</Text>
+        <Text style={styles.logoutText}>Effacer la configuration</Text>
       </TouchableOpacity>
     </View>
   );
@@ -92,7 +122,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15
+    fontSize: 15,
+    marginTop: 8
   },
   saveButton: {
     marginTop: 10,

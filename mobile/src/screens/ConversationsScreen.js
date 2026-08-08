@@ -47,7 +47,7 @@ export default function ConversationsScreen({ navigation, onLogout }) {
   );
 
   const renderItem = ({ item }) => {
-    const name = item.contact?.name || item.chatId.split('@')[0];
+    const name = item.contact?.name || item.name || item.chatId.split('@')[0];
     const phone = item.contact?.phone || item.chatId.split('@')[0];
     return (
       <TouchableOpacity

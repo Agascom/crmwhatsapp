@@ -12,26 +12,29 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { colors } from '../theme';
-import { api, getApiUrl, setApiUrl } from '../api';
+import { api, getConfig, setConfig } from '../api';
 
 export default function LoginScreen({ onLogin }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [apiUrl, setApiUrlValue] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const loadUrl = async () => setApiUrlValue(await getApiUrl());
-  React.useEffect(() => { loadUrl(); }, []);
+  const loadConfig = async () => {
+    const cfg = await getConfig();
+    if (cfg.url) setApiUrlValue(cfg.url);
+    if (cfg.key) setApiKey(cfg.key);
+  };
+  React.useEffect(() => { loadConfig(); }, []);
 
   const submit = async () => {
-    if (!username || !password) {
-      Alert.alert('Champs requis', 'Saisissez votre identifiant et votre mot de passe.');
+    if (!apiUrl.trim() || !apiKey.trim()) {
+      Alert.alert('Champs requis', 'Saisissez l\'adresse du serveur OpenWA et la clé API.');
       return;
     }
     try {
       setLoading(true);
-      if (apiUrl.trim()) await setApiUrl(apiUrl.trim());
-      await api.login(username.trim(), password);
+      await setConfig({ url: apiUrl.trim(), key: apiKey.trim() });
+      await api.connect();
       onLogin();
     } catch (err) {
       Alert.alert('Connexion impossible', err.message || 'Erreur réseau');
@@ -48,35 +51,27 @@ export default function LoginScreen({ onLogin }) {
       <StatusBar style="light" />
       <View style={styles.card}>
         <Text style={styles.logo}>WhatsApp CRM</Text>
-        <Text style={styles.subtitle}>Gérez vos clients et conversations</Text>
+        <Text style={styles.subtitle}>Connexion directe à OpenWA</Text>
 
-        <Text style={styles.label}>Adresse du serveur</Text>
+        <Text style={styles.label}>Adresse OpenWA</Text>
         <TextInput
           style={styles.input}
           value={apiUrl}
           onChangeText={setApiUrlValue}
-          placeholder="https://crm.votre-domaine.com"
+          placeholder="https://openwa.votre-domaine.com"
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
         />
 
-        <Text style={styles.label}>Identifiant</Text>
+        <Text style={styles.label}>Clé API</Text>
         <TextInput
           style={styles.input}
-          value={username}
-          onChangeText={setUsername}
-          placeholder="admin"
+          value={apiKey}
+          onChangeText={setApiKey}
+          placeholder="owa_k1_..."
           autoCapitalize="none"
           autoCorrect={false}
-        />
-
-        <Text style={styles.label}>Mot de passe</Text>
-        <TextInput
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="••••••••"
           secureTextEntry
         />
 
@@ -87,6 +82,9 @@ export default function LoginScreen({ onLogin }) {
             <Text style={styles.buttonText}>Se connecter</Text>
           )}
         </TouchableOpacity>
+        <Text style={styles.hint}>
+          La clé API vient du dashboard OpenWA (menu API Keys). Rôle OPERATOR requis pour envoyer des messages.
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -149,5 +147,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700'
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 16,
+    lineHeight: 16
   }
 });

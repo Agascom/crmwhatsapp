@@ -25,7 +25,8 @@
       "expo-secure-store"
     ],
     "extra": {
-      "apiUrl": "https://crm.votre-domaine.com"
+      "owaUrl": "https://openwa.votre-domaine.com",
+      "owaApiKey": ""
     }
   }
 }
