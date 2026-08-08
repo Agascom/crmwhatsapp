@@ -63,36 +63,15 @@ Puis copiez le code OpenWA **modifié** (section 1) dans `openwa/` et committez.
 
 OpenWA tourne comme **application Node.js** sur le même hébergement (une 2e « Web App »). Pas de Docker possible en mutualisé.
 
-### 1.1 Préparer le code (chez vous)
+### 1.1 Le code est déjà dans le dépôt
 
-```bash
-git clone https://github.com/rmyndharis/OpenWA.git
-cd OpenWA
-# Supprimer les fichiers Docker (non utilisés ici)
-Remove-Item Dockerfile, docker-compose.yml, docker-compose.dev.yml, .dockerignore, docker-entrypoint.sh -ErrorAction SilentlyContinue
-```
+Le code OpenWA (v0.14.6) est versionné dans **`openwa/`**, sans les fichiers Docker (`Dockerfile`, `docker-compose*.yml`, `.dockerignore`, `docker-entrypoint.sh`, `charts/`) — inutilisables en mutualisé. Le `.env.example` est fourni par OpenWA lui-même.
 
-Créer le fichier `.env.example` **à la racine** d'OpenWA (le vrai `.env` sera saisi dans hPanel) :
+> `ENGINE_TYPE=baileys` est **obligatoire** : ce moteur ne demande pas de Chromium (~30-80 Mo RAM/session) contrairement à `whatsapp-web.js`. Sans lui, OpenWA démarre sur le moteur par défaut `whatsapp-web.js` (lourd et fragilent en mutualisé).
 
-```bash
-# Fichier .env.example
-ENGINE_TYPE=baileys
-DB_TYPE=sqlite
-LOG_LEVEL=info
-# Laisser le port : Hostinger l'injectera via process.env.PORT
-```
+### 1.2 Port déjà géré
 
-> `ENGINE_TYPE=baileys` est **obligatoire** : ce moteur ne demande pas de Chromium (~30-80 Mo RAM/session) contrairement à `whatsapp-web.js`.
-
-### 1.2 Ouvrir la config Node.js du code
-
-OpenWA écoute par défaut sur le port `2785`. En hébergement mutualisé, l'app doit écouter sur `process.env.PORT`. Modifiez dans `src/main.ts` (recherchez l'instruction `.listen(`) :
-
-```ts
-await app.listen(process.env.PORT ? Number(process.env.PORT) : 2785, '0.0.0.0');
-```
-
-Vérifiez localement que le build passe :
+OpenWA 0.14.6 lit déjà `process.env.PORT` (défaut `2785`) — **aucun patch n'est nécessaire**. Hostinger injecte automatiquement `PORT` et le code écoute sur le bon port. Vérifiez localement que le build passe :
 
 ```bash
 npm ci
@@ -107,7 +86,7 @@ npm run build
 4. Node.js version : **22**.
 5. Build command : `npm run build`.
 6. Entry file : `dist/main.js`.
-7. Dans **Variables d'environnement** : `ENGINE_TYPE=baileys`, `DB_TYPE=sqlite` (Hostinger injecte aussi `PORT`).
+7. Dans **Variables d'environnement** : `ENGINE_TYPE=baileys`, `DATABASE_TYPE=sqlite`, `NODE_ENV=production` (Hostinger injecte aussi `PORT`).
 8. **Deploy**, puis ouvrez `https://openwa.votre-domaine.com` → dashboard OpenWA.
 9. Créez une session WhatsApp, scannez le QR, attendez le statut **ready**.
 10. Récupérez la clé API : menu **API Keys** (ou fichier `data/.api-key` via le File Manager).
