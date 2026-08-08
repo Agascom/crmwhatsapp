@@ -22,7 +22,7 @@ async function pickSessionId() {
 }
 
 router.get('/', asyncHandler(async (req, res) => {
-  const [rows] = await pool.query(`
+  const { rows } = await pool.query(`
     SELECT m.chat_id, m.ts AS last_ts, m.body AS last_body, m.direction AS last_direction,
            COALESCE((
              SELECT COUNT(*) FROM messages u
@@ -40,8 +40,8 @@ router.get('/', asyncHandler(async (req, res) => {
   const phones = rows.map((r) => chatToPhone(r.chat_id)).filter(Boolean);
   const contactMap = new Map();
   if (phones.length) {
-    const [contacts] = await pool.query(
-      'SELECT * FROM contacts WHERE phone IN (?)',
+    const { rows: contacts } = await pool.query(
+      'SELECT * FROM contacts WHERE phone = ANY($1::text[])',
       [phones]
     );
     for (const c of contacts) contactMap.set(c.phone, c);
@@ -62,9 +62,9 @@ router.get('/', asyncHandler(async (req, res) => {
 router.get('/:chatId/messages', asyncHandler(async (req, res) => {
   const chatId = req.params.chatId;
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-  const [rows] = await pool.query(
-    `SELECT * FROM messages WHERE chat_id = ? ORDER BY ts ASC LIMIT ${limit}`,
-    [chatId]
+  const { rows } = await pool.query(
+    'SELECT * FROM messages WHERE chat_id = $1 ORDER BY ts ASC LIMIT $2',
+    [chatId, limit]
   );
   res.json(rows);
 }));
@@ -78,21 +78,22 @@ router.post('/:chatId/messages', asyncHandler(async (req, res) => {
   const sessionId = await pickSessionId();
   const result = await openwa.sendText(sessionId, chatId, text.trim());
   const ts = Math.floor(Date.now() / 1000);
-  const [insert] = await pool.query(
+  const { rows } = await pool.query(
     `INSERT INTO messages (session_id, wa_message_id, chat_id, direction, from_me, body, type, ts, status)
-     VALUES (?, ?, ?, 'outgoing', 1, ?, 'text', ?, 'sent')`,
+     VALUES ($1, $2, $3, 'outgoing', 1, $4, 'text', $5, 'sent')
+     RETURNING *`,
     [sessionId, result.messageId, chatId, text.trim(), ts]
   );
-  const [rows] = await pool.query('SELECT * FROM messages WHERE id = ?', [insert.insertId]);
   res.status(201).json(rows[0]);
 }));
 
 router.post('/:chatId/read', asyncHandler(async (req, res) => {
   const chatId = req.params.chatId;
+  const ts = Math.floor(Date.now() / 1000);
   await pool.query(
-    `INSERT INTO conversations (chat_id, last_read_ts) VALUES (?, ?)
-     ON DUPLICATE KEY UPDATE last_read_ts = ?`,
-    [chatId, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000)]
+    `INSERT INTO conversations (chat_id, last_read_ts) VALUES ($1, $2)
+     ON CONFLICT (chat_id) DO UPDATE SET last_read_ts = EXCLUDED.last_read_ts`,
+    [chatId, ts]
   );
   res.json({ success: true });
 }));

@@ -19,13 +19,7 @@ const config = {
   openwaApiKey: required('OPENWA_API_KEY'),
   openwaSessionId: required('OPENWA_SESSION_ID', ''),
   webhookSecret: required('WEBHOOK_SECRET'),
-  db: {
-    host: required('DB_HOST', 'localhost'),
-    port: parseInt(required('DB_PORT', '3306'), 10),
-    user: required('DB_USER'),
-    password: required('DB_PASSWORD', ''),
-    database: required('DB_NAME')
-  }
+  databaseUrl: required('DATABASE_URL')
 };
 
 module.exports = config;

@@ -14,18 +14,20 @@ router.get('/', asyncHandler(async (req, res) => {
   let rows;
   if (search) {
     const like = `%${search}%`;
-    [rows] = await pool.query(
-      'SELECT * FROM contacts WHERE name LIKE ? OR phone LIKE ? ORDER BY name',
-      [like, like]
+    const { rows: found } = await pool.query(
+      'SELECT * FROM contacts WHERE name ILIKE $1 OR phone ILIKE $1 ORDER BY name',
+      [like]
     );
+    rows = found;
   } else {
-    [rows] = await pool.query('SELECT * FROM contacts ORDER BY name');
+    const { rows: all } = await pool.query('SELECT * FROM contacts ORDER BY name');
+    rows = all;
   }
   res.json(rows);
 }));
 
 router.get('/:id', asyncHandler(async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
+  const { rows } = await pool.query('SELECT * FROM contacts WHERE id = $1', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Contact introuvable' });
   res.json(rows[0]);
 }));
@@ -40,40 +42,39 @@ router.post('/', asyncHandler(async (req, res) => {
   if (existing) {
     return res.status(409).json({ message: 'Un contact avec ce telephone existe deja' });
   }
-  const [result] = await pool.query(
-    'INSERT INTO contacts (name, phone, wa_id, status, notes) VALUES (?, ?, ?, ?, ?)',
+  const { rows } = await pool.query(
+    'INSERT INTO contacts (name, phone, wa_id, status, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
     [name, norm, waId || null, STATUSES.includes(status) ? status : 'prospect', notes || null]
   );
-  const [rows] = await pool.query('SELECT * FROM contacts WHERE id = ?', [result.insertId]);
   res.status(201).json(rows[0]);
 }));
 
 router.put('/:id', asyncHandler(async (req, res) => {
   const { name, phone, status, notes } = req.body || {};
-  const [rows] = await pool.query('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
-  if (!rows.length) return res.status(404).json({ message: 'Contact introuvable' });
+  const { rows: current } = await pool.query('SELECT * FROM contacts WHERE id = $1', [req.params.id]);
+  if (!current.length) return res.status(404).json({ message: 'Contact introuvable' });
 
-  await pool.query(
-    'UPDATE contacts SET name = ?, phone = ?, status = ?, notes = ? WHERE id = ?',
+  const { rows: updated } = await pool.query(
+    `UPDATE contacts SET name = $1, phone = $2, status = $3, notes = $4
+     WHERE id = $5 RETURNING *`,
     [
-      name !== undefined ? name : rows[0].name,
-      phone !== undefined ? normalizePhone(phone) : rows[0].phone,
-      status !== undefined ? (STATUSES.includes(status) ? status : rows[0].status) : rows[0].status,
-      notes !== undefined ? notes : rows[0].notes,
+      name !== undefined ? name : current[0].name,
+      phone !== undefined ? normalizePhone(phone) : current[0].phone,
+      status !== undefined ? (STATUSES.includes(status) ? status : current[0].status) : current[0].status,
+      notes !== undefined ? notes : current[0].notes,
       req.params.id
     ]
   );
-  const [updated] = await pool.query('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
   res.json(updated[0]);
 }));
 
 router.delete('/:id', asyncHandler(async (req, res) => {
-  await pool.query('DELETE FROM contacts WHERE id = ?', [req.params.id]);
+  await pool.query('DELETE FROM contacts WHERE id = $1', [req.params.id]);
   res.status(204).end();
 }));
 
 async function findContactByPhone(phone) {
-  const [rows] = await pool.query('SELECT * FROM contacts WHERE phone = ?', [phone]);
+  const { rows } = await pool.query('SELECT * FROM contacts WHERE phone = $1', [phone]);
   return rows[0] || null;
 }
 

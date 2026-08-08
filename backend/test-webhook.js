@@ -9,9 +9,7 @@ process.env.PUBLIC_URL = 'https://crm.example.com';
 process.env.OPENWA_URL = 'http://localhost:2785';
 process.env.OPENWA_API_KEY = 'test-key';
 process.env.WEBHOOK_SECRET = 'test-secret';
-process.env.DB_USER = 'u';
-process.env.DB_PASSWORD = 'p';
-process.env.DB_NAME = 'n';
+process.env.DATABASE_URL = 'postgresql://u:p@localhost:5432/n';
 
 const SECRET = 'test-secret';
 
@@ -19,20 +17,19 @@ const mockPool = {
   async query(sql, params) {
     const q = String(sql);
     if (q.includes('SELECT 1 FROM messages WHERE idempotency_key')) {
-      return [this.alreadyProcessed ? [{}] : []];
+      return { rows: this.alreadyProcessed ? [{}] : [] };
     }
     if (q.includes('SELECT 1 FROM messages WHERE wa_message_id')) {
-      if (this.waIds.includes(params[0])) return [[{}]];
-      return [[]];
+      return { rows: this.waIds.includes(params[0]) ? [{}] : [] };
     }
     if (q.includes('INSERT INTO messages')) {
-      if (this.failInsert) { const e = new Error('dup'); e.code = 'ER_DUP_ENTRY'; throw e; }
-      return [{ affectedRows: 1 }];
+      if (this.failInsert) { const e = new Error('dup'); e.code = '23505'; throw e; }
+      return { rows: [], rowCount: 1 };
     }
-    if (q.includes('INSERT INTO contacts')) return [{ affectedRows: 1 }];
-    if (q.includes('SELECT id FROM contacts')) return [[]];
-    if (q.includes('UPDATE messages SET status')) return [{ affectedRows: 1 }];
-    return [[]];
+    if (q.includes('INSERT INTO contacts')) return { rows: [], rowCount: 1 };
+    if (q.includes('SELECT id FROM contacts')) return { rows: [] };
+    if (q.includes('UPDATE messages SET status')) return { rows: [], rowCount: 1 };
+    return { rows: [] };
   }
 };
 

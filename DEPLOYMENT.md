@@ -6,7 +6,7 @@ Ce guide couvre le déploiement complet : **OpenWA**, le **backend CRM** et l'**
 
 - Hébergement **mutualisé Business** (ou supérieur) — le support Node.js « Web Apps » est requis.
 - Un nom de domaine + sous-domaines : `crm.votre-domaine.com` (backend) et `openwa.votre-domaine.com` (passerelle).
-- Une **base MySQL** créée dans hPanel → **Bases de données**.
+- Une base de données **PostgreSQL Neon** (gratuite, distante, accès SSL) — l'accès MySQL local du mutualisé échouait (`Access denied`), Neon est accessible depuis n'importe où.
 - Un compte **GitHub** (déploiement automatique).
 
 ---
@@ -116,26 +116,25 @@ curl -s https://openwa.votre-domaine.com/api/health > /dev/null 2>&1
 | `OPENWA_API_KEY` | *clé récupérée au §1.3* |
 | `OPENWA_SESSION_ID` | *nom de la session* (ex. `default`) |
 | `WEBHOOK_SECRET` | *longue chaîne aléatoire* |
-| `DB_HOST` | `localhost` |
-| `DB_PORT` | `3306` |
-| `DB_USER` | *user MySQL Hostinger* |
-| `DB_PASSWORD` | *mot de passe MySQL* |
-| `DB_NAME` | *nom de la base (`u******_crm`)* |
+| `DATABASE_URL` | *chaîne de connexion Neon (SSL)*, ex. `postgresql://user:password@host.neon.tech/dbname?sslmode=require` |
 
 > Ne définissez **pas** `PORT` : Hostinger l'injecte (le backend a un fallback à 3000). `PUBLIC_URL` est l'URL du **backend** (c'est lui qui reçoit les webhooks OpenWA). Générez `JWT_SECRET` et `WEBHOOK_SECRET` avec :
 > ```bash
 > node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 > ```
+> 🔒 `DATABASE_URL` contient le mot de passe : saisissez-le **uniquement** dans hPanel (Environment variables), ne le committez jamais (le `.env` est ignoré par git).
 
 ### 2.2 Configuration de la Web App (hPanel)
 
 1. **Websites → Add Website → Node.js web app → Import Git repository** → sélectionnez `crmwhatsapp`.
 2. **Root directory** : `backend`.
 3. **Node.js** : **22**.
-4. **Build command** : `npm run init-db` (crée les tables MySQL, idempotent).
+4. **Build command** : `npm run init-db` (crée les tables **Postgres** sur Neon, idempotent — nécessite `DATABASE_URL` déjà défini dans les variables).
 5. **Entry file** : `src/server.js`.
 6. **Variables d'environnement** : saisissez le tableau du §2.1.
 7. **Deploy.**
+
+> Initialiser les tables une seule fois est suffisant ; le schéma est idempotent (`IF NOT EXISTS`) et `npm run init-db` peut être relancé sans risque.
 
 ### 2.3 Vérifier
 
@@ -172,4 +171,4 @@ L'écran de connexion permet aussi de modifier l'adresse du serveur depuis le t�
 | `Aucune session WhatsApp prête` | Le numéro n'est pas connecté dans le dashboard OpenWA |
 | Webhooks non enregistrés | Vérifier `PUBLIC_URL` (doit être HTTPS et public) et que la clé API a le rôle OPERATOR |
 | L'app ne reçoit pas les messages | Vérifier le cron de maintien OpenWA + les logs du backend |
-| Erreur MySQL au démarrage | Vérifier les identifiants MySQL hPanel et que la base existe |
+| Erreur de connexion Neon au démarrage | Vérifier `DATABASE_URL` (SSL obligatoire, `sslmode=require`) dans hPanel ; le backend écrit les erreurs dans `server.log` |
