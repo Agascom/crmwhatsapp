@@ -1,6 +1,6 @@
 # Déploiement
 
-Ce guide couvre le déploiement complet : **OpenWA**, le **backend CRM** et l'**app mobile**, avec l'hébergement mutualisé Hostinger.
+Ce guide couvre le déploiement complet : **OpenWA**, le **backend CRM** et l'**app mobile**, sur l'hébergement mutualisé Hostinger. Il reflète la configuration validée pendant le développement (les pièges rencontrés sont intégrés directement).
 
 ## Prérequis Hostinger
 
@@ -11,51 +11,40 @@ Ce guide couvre le déploiement complet : **OpenWA**, le **backend CRM** et l'**
 
 ---
 
-## 0. Mettre le code sur GitHub (déploiement automatique)
+## 0. Le dépôt GitHub (déploiement automatique)
 
-Hostinger Web Apps se connecte à un dépôt GitHub et **rebuild automatiquement à chaque `git push`**. Un seul dépôt `crm-whatsapp` suffit : Hostinger gère les monorepos via le réglage **Root directory** (une Web App par sous-dossier).
+Hostinger Web Apps se connecte à un dépôt GitHub et **redéploie automatiquement à chaque `git push`**. Un seul dépôt `crm-whatsapp` suffit : Hostinger gère les monorepos via le réglage **Root directory** (une Web App par sous-dossier).
 
-Structure attendue :
+Dépôt : `https://github.com/Agascom/crmwhatsapp.git`
+
+Structure :
 
 ```
 crm-whatsapp/
 ├── backend/     → Web App n°1 (Root directory: backend)
-├── openwa/      → Web App n°2 (Root directory: openwa)  ← code OpenWA modifié
+├── openwa/      → Web App n°2 (Root directory: openwa)  ← OpenWA v0.14.6 sans Docker
 └── mobile/      → versionné seulement, non déployé chez Hostinger
 ```
 
-### 0.1 Créer le dépôt et pousser le code
-
-```bash
-cd C:\Users\makou\crm-whatsapp
-git init
-git add .
-git commit -m "CRM WhatsApp : backend + mobile"
-git branch -M main
-git remote add origin https://github.com/VOTRE_USER/crm-whatsapp.git
-git push -u origin main
-```
-
-Puis copiez le code OpenWA **modifié** (section 1) dans `openwa/` et committez.
-
-### 0.2 Règles d'or
+### 0.1 Règles d'or
 
 | Faire | Ne PAS faire |
 |---|---|
 | Committer `package.json` + `package-lock.json` | Committer `node_modules/` |
 | Committer `.env.example` (valeurs factices) | Committer `.env` (mots de passe, clé API) |
+| Committer `openwa/dist/` (pré-compilé, voir §1.3) | Compiler chez Hostinger (mémoire insuffisante) |
 | Saisir les secrets dans hPanel → **Environment variables** | Mettre la clé API OpenWA dans l'app mobile |
 
 > Les variables d'environnement saisies dans hPanel persistent entre les déploiements.
 
-### 0.3 Créer les deux Web Apps (hPanel)
+### 0.2 Créer les deux Web Apps (hPanel)
 
-1. **Websites → Add Website → Node.js web app → Import Git repository → Connect with GitHub** (installez l'app GitHub Hostinger, autorisez le dépôt).
-2. Sélectionnez `crm-whatsapp` — la config se pré-remplit automatiquement.
-3. Web App **backend** : Root directory `backend`, Node 22, Build command `npm run init-db`, Entry file `src/server.js`.
-4. Web App **openwa** : Root directory `openwa`, Node 22, Build command `npm run build`, Entry file `dist/main.js`.
-5. Renseignez les variables d'environnement de chaque app (sections 1 et 2).
-6. **Déployer.** Chaque push sur `main` relance le build automatiquement.
+1. **Websites → Add Website → Node.js web app → Import Git repository → Connect with GitHub** (installez l'app GitHub Hostinger, autorisez `Agascom/crmwhatsapp`).
+2. Sélectionnez `crmwhatsapp` — la config se pré-remplit.
+3. Configurez chaque app comme décrit ci-dessous (§1 pour `openwa`, §2 pour `backend`).
+4. **Deploy.** Chaque push sur `main` relance le déploiement automatiquement.
+
+> ⚠️ Ne définissez jamais `PORT` dans les variables d'environnement : Hostinger l'injecte automatiquement.
 
 ---
 
@@ -63,82 +52,89 @@ Puis copiez le code OpenWA **modifié** (section 1) dans `openwa/` et committez.
 
 OpenWA tourne comme **application Node.js** sur le même hébergement (une 2e « Web App »). Pas de Docker possible en mutualisé.
 
-### 1.1 Le code est déjà dans le dépôt
+### 1.1 Le code
 
-Le code OpenWA (v0.14.6) est versionné dans **`openwa/`**, sans les fichiers Docker (`Dockerfile`, `docker-compose*.yml`, `.dockerignore`, `docker-entrypoint.sh`, `charts/`) — inutilisables en mutualisé. Le `.env.example` est fourni par OpenWA lui-même.
+OpenWA v0.14.6 est versionné dans **`openwa/`**, sans les fichiers Docker (`Dockerfile`, `docker-compose*.yml`, `.dockerignore`, `docker-entrypoint.sh`, `charts/`) — inutilisables en mutualisé. Le `.env.example` et le `.npmrc` (`engine-strict=false`) sont fournis.
 
-> `ENGINE_TYPE=baileys` est **obligatoire** : ce moteur ne demande pas de Chromium (~30-80 Mo RAM/session) contrairement à `whatsapp-web.js`. Sans lui, OpenWA démarre sur le moteur par défaut `whatsapp-web.js` (lourd et fragilent en mutualisé).
+> `ENGINE_TYPE=baileys` est **obligatoire** : ce moteur ne demande pas de Chromium (~30-80 Mo RAM/session) contrairement à `whatsapp-web.js`. Sans lui, OpenWA utilise le moteur par défaut `whatsapp-web.js` (lourd et fragile en mutualisé).
 
-### 1.2 Port déjà géré
+### 1.2 Port et compatibilité
 
-OpenWA 0.14.6 lit déjà `process.env.PORT` (défaut `2785`) — **aucun patch n'est nécessaire**. Hostinger injecte automatiquement `PORT` et le code écoute sur le bon port. Vérifiez localement que le build passe :
+- OpenWA 0.14.6 lit déjà `process.env.PORT` (défaut `2785`) — **aucun patch nécessaire**.
+- La vérification npm des moteurs (`EBADENGINE`, typeorm exige `^22.13.0 || >=24.11.0`) est neutralisée par `.npmrc` + la variable `NPM_CONFIG_ENGINE_STRICT=false`. Les avertissements qui restent (undici/jsdom) sont sans conséquence.
 
-```bash
-npm ci
-npm run build
-```
+### 1.3 Configuration de la Web App (hPanel)
 
-### 1.3 Envoyer sur Hostinger (hPanel)
-
-1. Copiez le dossier OpenWA modifié dans le dépôt `crm-whatsapp/openwa` et poussez (`git add . && git commit && git push`).
-2. Dans hPanel : **Add Website → Node.js web app → Import Git repository**.
-3. Sélectionnez le dépôt → **Root directory : `openwa`**.
-4. Node.js version : **22**.
-5. **Build command : laisser vide** — le dossier `dist/` pré-compilé est déjà committé (le build TypeScript `nest build` échoue en mémoire limitée sur le mutualisé). En cas de modification du code, régénérez `dist/` en local puis committez :
+1. **Add Website → Node.js web app → Import Git repository** → sélectionnez `crmwhatsapp`.
+2. **Root directory** : `openwa`.
+3. **Node.js version** : **22** (ou 24).
+4. **Build command** : **laisser VIDE** — le dossier `dist/` pré-compilé est déjà committé. En cas de modification du code, régénérez en local puis committez :
    ```bash
    cd openwa && npm ci && npm run build && cd ..
    git add openwa/dist && git commit -m "openwa: regen dist" && git push
    ```
-6. Entry file : `dist/main.js`.
-7. Dans **Variables d'environnement** : `ENGINE_TYPE=baileys`, `DATABASE_TYPE=sqlite`, `NODE_ENV=production` (Hostinger injecte aussi `PORT`).
-8. **Deploy**, puis ouvrez `https://openwa.votre-domaine.com` → dashboard OpenWA.
-9. Créez une session WhatsApp, scannez le QR, attendez le statut **ready**.
-10. Récupérez la clé API : menu **API Keys** (ou fichier `data/.api-key` via le File Manager).
+5. **Entry file** : `dist/main.js`.
+6. **Variables d'environnement** :
+
+   | Variable | Valeur |
+   |---|---|
+   | `ENGINE_TYPE` | `baileys` |
+   | `DATABASE_TYPE` | `sqlite` |
+   | `NODE_ENV` | `production` |
+   | `BASE_URL` | `https://openwa.votre-domaine.com` |
+   | `NPM_CONFIG_ENGINE_STRICT` | `false` |
+
+   (Hostinger injecte `PORT` lui-même.)
+7. **Deploy**, puis ouvrez `https://openwa.votre-domaine.com` → dashboard OpenWA.
+8. Créez une **session** WhatsApp, scannez le **QR**, attendez le statut **ready**.
+9. Récupérez la **clé API** : menu **API Keys** (ou fichier `data/.api-key` via le File Manager).
 
 ### 1.4 Garder la connexion vivante (cron)
 
-Le mutualisé peut « endormir » le process inactif → WhatsApp se déconnecte. Dans hPanel → **Cron Jobs** :
+Le mutualisé peut « endormir » le process inactif → WhatsApp se déconnecte. Dans hPanel → **Cron Jobs**, toutes les 5 minutes :
 
 ```
 curl -s https://openwa.votre-domaine.com/api/health > /dev/null 2>&1
 ```
 
-Toutes les 5 minutes. Ce ping maintient le process actif.
-
-> ⚠️ La clé API OpenWA est à placer **uniquement** dans le `.env` du backend CRM. Ne la mettez jamais dans l'app mobile.
+> ⚠️ La clé API OpenWA va **uniquement** dans les variables d'environnement du backend CRM. Jamais dans l'app mobile.
 
 ---
 
 ## 2. Déployer le backend CRM
 
-### 2.1 Configurer `.env`
+### 2.1 Variables d'environnement (hPanel)
 
-```
-PORT=3000
-ADMIN_USER=admin
-ADMIN_PASSWORD=mot-de-passe-fort
-JWT_SECRET=<longue-chaine-aleatoire>
-PUBLIC_URL=https://crm.votre-domaine.com
-DB_HOST=localhost
-DB_USER=<user-mysql-hostinger>
-DB_PASSWORD=<mdp-mysql>
-DB_NAME=<nom-base-hostinger>
-OPENWA_URL=https://openwa.votre-domaine.com
-OPENWA_API_KEY=<cle-openwa>
-WEBHOOK_SECRET=<chaine-aleatoire>
-```
+| Variable | Valeur |
+|---|---|
+| `ADMIN_USER` | `admin` |
+| `ADMIN_PASSWORD` | *mot de passe fort* |
+| `JWT_SECRET` | *longue chaîne aléatoire* |
+| `PUBLIC_URL` | `https://crm.votre-domaine.com` |
+| `OPENWA_URL` | `https://openwa.votre-domaine.com` |
+| `OPENWA_API_KEY` | *clé récupérée au §1.3* |
+| `OPENWA_SESSION_ID` | *nom de la session* (ex. `default`) |
+| `WEBHOOK_SECRET` | *longue chaîne aléatoire* |
+| `DB_HOST` | `localhost` |
+| `DB_PORT` | `3306` |
+| `DB_USER` | *user MySQL Hostinger* |
+| `DB_PASSWORD` | *mot de passe MySQL* |
+| `DB_NAME` | *nom de la base (`u******_crm`)* |
 
-> `PUBLIC_URL` est l'URL du **backend** (c'est lui qui reçoit les webhooks OpenWA).
+> Ne définissez **pas** `PORT` : Hostinger l'injecte (le backend a un fallback à 3000). `PUBLIC_URL` est l'URL du **backend** (c'est lui qui reçoit les webhooks OpenWA). Générez `JWT_SECRET` et `WEBHOOK_SECRET` avec :
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+> ```
 
-### 2.2 Envoyer sur Hostinger (hPanel)
+### 2.2 Configuration de la Web App (hPanel)
 
-1. **Websites → Add Website → Node.js web app → Import Git repository** (dépôt déjà connecté, voir section 0).
-2. Sélectionnez le dépôt `crm-whatsapp` → **Root directory : `backend`**.
-3. Node.js **22**.
-4. Build command : `npm run init-db` (crée les tables MySQL, idempotent).
-5. Entry file : `src/server.js`.
-6. **Variables d'environnement** : saisissez tout le bloc `.env` de la section 2.1 (hPanel les injecte au build et au runtime, pas besoin de commit).
-7. **Deploy.** Chaque `git push` sur `main` redéploie automatiquement le backend.
+1. **Websites → Add Website → Node.js web app → Import Git repository** → sélectionnez `crmwhatsapp`.
+2. **Root directory** : `backend`.
+3. **Node.js** : **22**.
+4. **Build command** : `npm run init-db` (crée les tables MySQL, idempotent).
+5. **Entry file** : `src/server.js`.
+6. **Variables d'environnement** : saisissez le tableau du §2.1.
+7. **Deploy.**
 
 ### 2.3 Vérifier
 
@@ -161,15 +157,17 @@ L'écran de connexion permet aussi de modifier l'adresse du serveur depuis le t�
 
 ## Ordre de mise en route
 
-1. Déployer OpenWA + connecter le numéro (QR) + récupérer la clé API.
-2. Déployer le backend CRM (avec clé API + webhook).
+1. Déployer **OpenWA** + connecter le numéro (QR) + récupérer la clé API.
+2. Déployer le **backend** (avec clé API + webhook).
 3. Vérifier `health` + les logs webhooks.
-4. Installer et tester l'app mobile.
+4. Installer et tester l'**app mobile**.
 
 ## Dépannage rapide
 
 | Problème | Solution |
 |---|---|
+| Échec d'installation `EBADENGINE` | Normal, neutralisé par `.npmrc` / `NPM_CONFIG_ENGINE_STRICT=false` — vérifier que le déploiement continue |
+| Échec de **compilation** | Build command doit être **vide** (dossier `dist/` committé) |
 | `Aucune session WhatsApp prête` | Le numéro n'est pas connecté dans le dashboard OpenWA |
 | Webhooks non enregistrés | Vérifier `PUBLIC_URL` (doit être HTTPS et public) et que la clé API a le rôle OPERATOR |
 | L'app ne reçoit pas les messages | Vérifier le cron de maintien OpenWA + les logs du backend |
