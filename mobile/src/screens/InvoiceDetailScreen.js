@@ -19,6 +19,7 @@ import {
   TYPE_LABELS
 } from '../store/invoicesStore';
 import { generatePdf, invoiceFilename } from '../pdf';
+import { paymentsStore } from '../store/paymentsStore';
 import Badge from '../components/Badge';
 import EmptyState from '../components/EmptyState';
 import * as Sharing from 'expo-sharing';
@@ -46,6 +47,7 @@ export default function InvoiceDetailScreen({ route, navigation, onLogout }) {
   const { invoiceId } = route.params || {};
   const [invoice, setInvoice] = useState(null);
   const [client, setClient] = useState(null);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -60,6 +62,7 @@ export default function InvoiceDetailScreen({ route, navigation, onLogout }) {
       setInvoice(inv);
       const c = await api.getContact(inv.client_id);
       setClient(c);
+      setPayments(await paymentsStore.listByInvoice(invoiceId));
     } catch (err) {
       if (isAuthError(err)) onLogout();
     } finally {
@@ -234,6 +237,42 @@ export default function InvoiceDetailScreen({ route, navigation, onLogout }) {
         </View>
       ) : null}
 
+      <View style={styles.payHeader}>
+        <Text style={styles.payHeaderTitle}>Encaissements</Text>
+        <TouchableOpacity
+          style={styles.payAddBtn}
+          onPress={() =>
+            navigation.navigate('PaymentForm', {
+              invoiceId: invoice.id,
+              clientId: invoice.client_id,
+              clientName: client ? client.name : ''
+            })
+          }
+        >
+          <Text style={styles.payAddText}>+ Encaisser</Text>
+        </TouchableOpacity>
+      </View>
+      {payments.length === 0 ? (
+        <EmptyState text="Aucun encaissement pour ce document." />
+      ) : (
+        <>
+          {payments.map((p) => (
+            <View key={p.id} style={styles.payRow}>
+              <View style={styles.payBody}>
+                <Text style={styles.payText}>
+                  {fmtMoney(p.amount)} {p.method ? `· ${p.method}` : ''}
+                </Text>
+                <Text style={styles.payMeta}>{fmtDate(p.created_at)}{p.note ? ` · ${p.note}` : ''}</Text>
+              </View>
+            </View>
+          ))}
+          <View style={styles.payTotal}>
+            <Text style={styles.payTotalLabel}>Encaissé</Text>
+            <Text style={styles.payTotalValue}>{fmtMoney(payments.reduce((s, p) => s + p.amount, 0))}</Text>
+          </View>
+        </>
+      )}
+
       <Text style={styles.actionLabel}>Statut</Text>
       <View style={styles.statusRow}>
         {allowedStatuses.map((s) => (
@@ -305,6 +344,17 @@ const styles = StyleSheet.create({
   notesBox: { marginTop: 16 },
   notesLabel: { fontSize: 10, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' },
   notesText: { fontSize: 13, color: colors.text, marginTop: 4 },
+  payHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 },
+  payHeaderTitle: { fontSize: 13, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' },
+  payAddBtn: { borderWidth: 1, borderColor: colors.primaryDeep, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  payAddText: { color: colors.primaryDeep, fontSize: 12, fontWeight: '700' },
+  payRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 8 },
+  payBody: { flex: 1 },
+  payText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  payMeta: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  payTotal: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8 },
+  payTotalLabel: { fontSize: 13, color: colors.textMuted },
+  payTotalValue: { fontSize: 15, fontWeight: '800', color: colors.primaryDeep },
   actionLabel: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 22, marginBottom: 6 },
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   statusBtn: {

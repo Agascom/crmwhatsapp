@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Version du schéma : incrémenter à chaque évolution des tables.
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let db = null;
 
@@ -91,6 +91,24 @@ async function migrate(database) {
       CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items (invoice_id);
     `);
     await database.execAsync(`PRAGMA user_version = 2`);
+  }
+
+  if (current < 3) {
+    // Schéma v3 : encaissements (Module « Finances »).
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER,
+        client_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        method TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payments_client ON payments (client_id);
+      CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments (invoice_id);
+    `);
+    await database.execAsync(`PRAGMA user_version = 3`);
   }
 
   // Migration unique des anciens contacts AsyncStorage vers la table clients.

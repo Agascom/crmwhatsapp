@@ -12,10 +12,12 @@ import LoginScreen from './src/screens/LoginScreen';
 import ConversationsScreen from './src/screens/ConversationsScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import FinancesScreen from './src/screens/FinancesScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ContactScreen from './src/screens/ContactScreen';
 import InvoiceFormScreen from './src/screens/InvoiceFormScreen';
 import InvoiceDetailScreen from './src/screens/InvoiceDetailScreen';
+import PaymentFormScreen from './src/screens/PaymentFormScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -48,6 +50,12 @@ function HomeTabs({ onLogout }) {
         options={{ title: 'Contacts', tabBarLabel: 'Contacts', tabBarIcon: () => <Text style={tabStyles}>👥</Text> }}
       >
         {(props) => <ContactsScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
+      <Tab.Screen
+        name="Finances"
+        options={{ title: 'Finances', tabBarLabel: 'Finances', tabBarIcon: () => <Text style={tabStyles}>💰</Text> }}
+      >
+        {(props) => <FinancesScreen {...props} onLogout={onLogout} />}
       </Tab.Screen>
       <Tab.Screen
         name="Settings"
@@ -117,6 +125,9 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="InvoiceDetail" options={{ title: 'Document' }}>
               {(props) => <InvoiceDetailScreen {...props} onLogout={handleLogout} />}
+            </Stack.Screen>
+            <Stack.Screen name="PaymentForm" options={{ title: 'Encaissement' }}>
+              {() => <PaymentFormScreen />}
             </Stack.Screen>
           </>
         )}

@@ -19,9 +19,9 @@ function formatTime(ts) {
 }
 
 export default function ChatScreen({ route, navigation, onLogout }) {
-  const { chatId, title } = route.params;
+  const { chatId, title, initialText } = route.params;
   const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText || '');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const listRef = useRef(null);

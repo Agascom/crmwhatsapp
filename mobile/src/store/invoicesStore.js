@@ -64,6 +64,26 @@ export const invoicesStore = {
     return rows.map(mapRow);
   },
 
+  // Factures ouvertes (non soldées) pour un encaissement.
+  async listOpenInvoices() {
+    const db = await getDb();
+    const rows = await db.getAllAsync(
+      `SELECT i.*, c.name AS client_name, c.phone AS client_phone,
+              COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id), 0) AS paid
+       FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
+       WHERE i.type = 'invoice' AND i.status IN ('draft', 'sent', 'overdue')
+       ORDER BY i.issue_date DESC`
+    );
+    return rows.map((r) => {
+      const inv = mapRow(r);
+      inv.client_name = r.client_name;
+      inv.client_phone = r.client_phone;
+      inv.paid = Number(r.paid || 0);
+      inv.remaining = Math.round((inv.total_ttc - inv.paid) * 100) / 100;
+      return inv;
+    });
+  },
+
   async get(id) {
     const db = await getDb();
     const inv = await db.getFirstAsync('SELECT * FROM invoices WHERE id = ?', Number(id));
