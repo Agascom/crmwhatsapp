@@ -129,12 +129,12 @@ curl -s https://openwa.votre-domaine.com/api/health > /dev/null 2>&1
 1. **Websites → Add Website → Node.js web app → Import Git repository** → sélectionnez `crmwhatsapp`.
 2. **Root directory** : `backend`.
 3. **Node.js** : **22**.
-4. **Build command** : `npm run init-db` (crée les tables **Postgres** sur Neon, idempotent — nécessite `DATABASE_URL` déjà défini dans les variables).
+4. **Build command** : **laisser VIDE** — les tables Postgres sont créées automatiquement au premier démarrage (`ensureSchema`, idempotent). Le script `npm run init-db` reste disponible pour une initialisation manuelle en local.
 5. **Entry file** : `src/server.js`.
 6. **Variables d'environnement** : saisissez le tableau du §2.1.
 7. **Deploy.**
 
-> Initialiser les tables une seule fois est suffisant ; le schéma est idempotent (`IF NOT EXISTS`) et `npm run init-db` peut être relancé sans risque.
+> Le backend **ne crashe plus** si la base est momentanément injoignable : il écoute immédiatement, retente la connexion pendant ~50 s et écrit chaque étape dans `backend/src/server.log` (visible dans hPanel → File Manager). `/health` répond toujours.
 
 ### 2.3 Vérifier
 

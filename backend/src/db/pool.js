@@ -14,4 +14,8 @@ const pool = new Pool({
   max: 5
 });
 
+pool.on('error', (err) => {
+  console.error('Erreur du pool Postgres:', err.message);
+});
+
 module.exports = pool;
