@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Version du schéma : incrémenter à chaque évolution des tables.
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let db = null;
 
@@ -109,6 +109,38 @@ async function migrate(database) {
       CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments (invoice_id);
     `);
     await database.execAsync(`PRAGMA user_version = 3`);
+  }
+
+  if (current < 4) {
+    // Schéma v4 : templates, campagnes de relance et destinataires (Module « Relance »).
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        template_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'prepared',
+        filter_status TEXT NOT NULL DEFAULT '',
+        filter_tag TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS campaign_recipients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        client_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        sent_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_campaign_recipients_campaign ON campaign_recipients (campaign_id);
+    `);
+    await database.execAsync(`PRAGMA user_version = 4`);
   }
 
   // Migration unique des anciens contacts AsyncStorage vers la table clients.

@@ -13,6 +13,11 @@ import ConversationsScreen from './src/screens/ConversationsScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import FinancesScreen from './src/screens/FinancesScreen';
+import CampaignsScreen from './src/screens/CampaignsScreen';
+import CampaignFormScreen from './src/screens/CampaignFormScreen';
+import CampaignDetailScreen from './src/screens/CampaignDetailScreen';
+import TemplatesScreen from './src/screens/TemplatesScreen';
+import TemplateFormScreen from './src/screens/TemplateFormScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ContactScreen from './src/screens/ContactScreen';
 import InvoiceFormScreen from './src/screens/InvoiceFormScreen';
@@ -56,6 +61,12 @@ function HomeTabs({ onLogout }) {
         options={{ title: 'Finances', tabBarLabel: 'Finances', tabBarIcon: () => <Text style={tabStyles}>💰</Text> }}
       >
         {(props) => <FinancesScreen {...props} onLogout={onLogout} />}
+      </Tab.Screen>
+      <Tab.Screen
+        name="Relance"
+        options={{ title: 'Relance', tabBarLabel: 'Relance', tabBarIcon: () => <Text style={tabStyles}>📢</Text> }}
+      >
+        {() => <CampaignsScreen />}
       </Tab.Screen>
       <Tab.Screen
         name="Settings"
@@ -128,6 +139,18 @@ export default function App() {
             </Stack.Screen>
             <Stack.Screen name="PaymentForm" options={{ title: 'Encaissement' }}>
               {() => <PaymentFormScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="CampaignForm" options={{ title: 'Nouvelle campagne' }}>
+              {() => <CampaignFormScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="CampaignDetail" options={{ title: 'Campagne' }}>
+              {() => <CampaignDetailScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="Templates" options={{ title: 'Modèles de message' }}>
+              {() => <TemplatesScreen />}
+            </Stack.Screen>
+            <Stack.Screen name="TemplateForm" options={{ title: 'Modèle de message' }}>
+              {() => <TemplateFormScreen />}
             </Stack.Screen>
           </>
         )}
